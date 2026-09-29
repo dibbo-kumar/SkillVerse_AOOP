@@ -1,89 +1,104 @@
 package com.skillverse.controller;
 
-import com.skillverse.dto.WorkerWalletRequest;
-import com.skillverse.model.WorkerWallet;
+import com.skillverse.model.*;
+import com.skillverse.repository.*;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 @RestController
-@RequestMapping("/api/worker-wallets")
+@RequestMapping("/api/wallet")
 @CrossOrigin(origins = "*")
 public class WorkerWalletController {
 
-    // In-memory list to store worker wallets (No Database)
-    private List<WorkerWallet> walletList = new ArrayList<>();
-    private Long nextId = 1L;
+    private final WorkerWalletRepository walletRepository;
+    private final WalletTransactionRepository transactionRepository;
+    private final UserRepository userRepository;
 
-    public WorkerWalletController() {
-        // Sample starter data
-        walletList.add(new WorkerWallet(nextId++, 2L, 12500.0, 18500.0));
+    public WorkerWalletController(WorkerWalletRepository walletRepository,
+                                  WalletTransactionRepository transactionRepository,
+                                  UserRepository userRepository) {
+        this.walletRepository = walletRepository;
+        this.transactionRepository = transactionRepository;
+        this.userRepository = userRepository;
     }
 
-    // 1. getAll - uses @RequestParam
-    @GetMapping
-    public List<WorkerWallet> getAll(@RequestParam(required = false) Long workerId) {
-        if (workerId == null) {
-            return walletList;
+    @GetMapping("/worker/{workerId}")
+    public ResponseEntity<?> getWallet(@PathVariable Long workerId) {
+        User worker = userRepository.findById(workerId).orElse(null);
+        if (worker == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Worker not found"));
         }
 
-        List<WorkerWallet> result = new ArrayList<>();
-        for (WorkerWallet wallet : walletList) {
-            if (wallet.getWorkerId() != null && wallet.getWorkerId().equals(workerId)) {
-                result.add(wallet);
-            }
+        WorkerWallet wallet = walletRepository.findByWorkerId(workerId)
+                .orElseGet(() -> walletRepository.save(new WorkerWallet(worker)));
+
+        // Guarantee balance is never negative
+        if (wallet.getBalance() == null || wallet.getBalance() < 0.0) {
+            wallet.setBalance(0.0);
+            walletRepository.save(wallet);
         }
-        return result;
+
+        return ResponseEntity.ok(wallet);
     }
 
-    // 2. getById - uses @PathVariable
-    @GetMapping("/{id}")
-    public WorkerWallet getById(@PathVariable Long id) {
-        for (WorkerWallet wallet : walletList) {
-            if (wallet.getId().equals(id)) {
-                return wallet;
-            }
-        }
-        return null;
+    @GetMapping("/transactions/worker/{workerId}")
+    public ResponseEntity<List<WalletTransaction>> getTransactions(@PathVariable Long workerId) {
+        return ResponseEntity.ok(transactionRepository.findByWorkerIdOrderByCreatedAtDesc(workerId));
     }
 
-    // 3. save - uses @RequestBody with WorkerWalletRequest object
-    @PostMapping
-    public WorkerWallet save(@RequestBody WorkerWalletRequest request) {
-        WorkerWallet wallet = new WorkerWallet();
-        wallet.setId(nextId++);
-        wallet.setWorkerId(request.getWorkerId());
-        wallet.setBalance(request.getBalance() != null ? request.getBalance() : 0.0);
-        wallet.setTotalEarnings(request.getTotalEarnings() != null ? request.getTotalEarnings() : 0.0);
+    @PostMapping("/withdraw")
+    public ResponseEntity<?> requestWithdrawal(@RequestBody Map<String, Object> req) {
+        Long workerId = Long.valueOf(req.get("workerId").toString());
+        Double amount = Double.valueOf(req.get("amount").toString());
+        String method = req.getOrDefault("method", "bKash").toString();
+        String accountNo = req.getOrDefault("accountNo", "").toString();
+        String bankName = req.getOrDefault("bankName", "").toString();
+        String branchName = req.getOrDefault("branchName", "").toString();
+        String accountHolder = req.getOrDefault("accountHolder", "").toString();
 
-        walletList.add(wallet);
-        return wallet;
-    }
-
-    // 4. upload - uses @RequestParam
-    @PostMapping("/{id}/upload")
-    public WorkerWallet upload(@PathVariable Long id, @RequestParam Double depositAmount) {
-        for (WorkerWallet wallet : walletList) {
-            if (wallet.getId().equals(id)) {
-                double currentBalance = wallet.getBalance() != null ? wallet.getBalance() : 0.0;
-                double add = depositAmount != null ? depositAmount : 0.0;
-                wallet.setBalance(currentBalance + add);
-                return wallet;
-            }
+        User worker = userRepository.findById(workerId).orElse(null);
+        if (worker == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Worker not found"));
         }
-        return null;
-    }
 
-    // 5. delete - uses @PathVariable
-    @DeleteMapping("/{id}")
-    public String delete(@PathVariable Long id) {
-        for (int i = 0; i < walletList.size(); i++) {
-            if (walletList.get(i).getId().equals(id)) {
-                walletList.remove(i);
-                return "WorkerWallet deleted successfully";
-            }
+        if (amount == null || amount <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Cashout amount must be greater than 0."));
         }
-        return "WorkerWallet not found";
+
+        WorkerWallet wallet = walletRepository.findByWorkerId(workerId)
+                .orElseGet(() -> walletRepository.save(new WorkerWallet(worker)));
+
+        double currentBal = wallet.getBalance() != null ? Math.max(0.0, wallet.getBalance()) : 0.0;
+        if (currentBal < amount) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Insufficient available balance for cashout. Available balance: ৳" + currentBal));
+        }
+
+        // Deduct from main wallet, ensuring balance can never be negative
+        double newBalance = Math.max(0.0, Math.round((currentBal - amount) * 100.0) / 100.0);
+        wallet.setBalance(newBalance);
+        double totalWithdrawn = (wallet.getTotalWithdrawals() != null ? wallet.getTotalWithdrawals() : 0.0) + amount;
+        wallet.setTotalWithdrawals(Math.round(totalWithdrawn * 100.0) / 100.0);
+        wallet.setUpdatedAt(java.time.LocalDateTime.now());
+        walletRepository.save(wallet);
+
+        String desc;
+        if ("Bank".equalsIgnoreCase(method) || "Bank Transfer".equalsIgnoreCase(method)) {
+            desc = "Bank Cashout to " + (bankName.isEmpty() ? "Bank" : bankName) + " (A/C: " + accountNo + ", Branch: " + (branchName.isEmpty() ? "Principal" : branchName) + ", Holder: " + accountHolder + ")";
+        } else {
+            desc = "Cashout via " + method + " (" + accountNo + ")";
+        }
+
+        WalletTransaction tx = new WalletTransaction(
+                worker, "WITHDRAWAL", -amount, desc, null
+        );
+        tx.setStatus("COMPLETED");
+        transactionRepository.save(tx);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Cashout of ৳" + amount + " via " + method + " processed successfully.",
+                "wallet", wallet,
+                "transaction", tx
+        ));
     }
 }

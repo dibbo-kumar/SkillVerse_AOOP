@@ -1,41 +1,52 @@
 package com.skillverse.model;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "problem_offers")
 public class ProblemOffer {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long problemPostId;
-    private Long workerId;
+
+    @ManyToOne
+    @JoinColumn(name = "problem_post_id")
+    private ProblemPost problemPost;
+
+    @ManyToOne
+    @JoinColumn(name = "worker_id")
+    private User worker;
+
     private Double proposedPrice;
     private String message;
     private String estimatedArrival;
-    private String status; // PENDING, ACCEPTED, DECLINED
-    private LocalDateTime createdAt;
 
-    public ProblemOffer() {
-        this.status = "PENDING";
-        this.createdAt = LocalDateTime.now();
-    }
+    private String status = "PENDING"; // PENDING, ACCEPTED, DECLINED
 
-    public ProblemOffer(Long id, Long problemPostId, Long workerId, Double proposedPrice, String message, String estimatedArrival) {
-        this();
-        this.id = id;
-        this.problemPostId = problemPostId;
-        this.workerId = workerId;
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    public ProblemOffer() {}
+
+    public ProblemOffer(ProblemPost problemPost, User worker, Double proposedPrice, String message, String estimatedArrival) {
+        this.problemPost = problemPost;
+        this.worker = worker;
         this.proposedPrice = proposedPrice;
         this.message = message;
         this.estimatedArrival = estimatedArrival;
+        this.status = "PENDING";
+        this.createdAt = LocalDateTime.now();
     }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getProblemPostId() { return problemPostId; }
-    public void setProblemPostId(Long problemPostId) { this.problemPostId = problemPostId; }
+    public ProblemPost getProblemPost() { return problemPost; }
+    public void setProblemPost(ProblemPost problemPost) { this.problemPost = problemPost; }
 
-    public Long getWorkerId() { return workerId; }
-    public void setWorkerId(Long workerId) { this.workerId = workerId; }
+    public User getWorker() { return worker; }
+    public void setWorker(User worker) { this.worker = worker; }
 
     public Double getProposedPrice() { return proposedPrice; }
     public void setProposedPrice(Double proposedPrice) { this.proposedPrice = proposedPrice; }

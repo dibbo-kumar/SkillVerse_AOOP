@@ -28,6 +28,8 @@ import {
   Trash2,
   TrendingUp,
   Heart,
+  Bookmark,
+  BookmarkCheck,
   Navigation,
   XCircle,
   Camera,
@@ -50,7 +52,7 @@ import NotificationBell from './components/notifications/NotificationBell';
 import PostedProblemsHub from './components/bookings/PostedProblemsHub';
 import LandingPage from './components/landing/LandingPage';
 
-const API_BASE = "http://localhost:8080/api";
+const API_BASE = "http://localhost:8081/api";
 
 // Preset diagnostic photos for customer mock upload
 const MOCK_PHOTOS = [
@@ -231,17 +233,19 @@ const INITIAL_REVIEWS = [
 const INITIAL_WORKERS = [
   {
     id: 1,
-    skills: 'Electrical, AC Repair',
-    experienceYears: 5,
-    serviceArea: 'Uttara, Dhaka',
+    skills: 'Electrical, AC Repair, Smart Home',
+    experienceYears: 6,
+    serviceArea: 'Sector 11, Uttara, Dhaka',
     careerLevel: 'Gold',
     hourlyRate: 450,
     basePrice: 300,
+    latitude: 23.8720,
+    longitude: 90.3810,
     user: {
-      id: 2,
+      id: 3,
       name: 'Kamrul Islam',
       email: 'kamrul@gmail.com',
-      phone: '01822223344',
+      phone: '01911223344',
       role: 'WORKER',
       verified: true,
       rating: 4.8,
@@ -250,21 +254,275 @@ const INITIAL_WORKERS = [
   },
   {
     id: 2,
-    skills: 'Plumbing, Pipe Fitting',
-    experienceYears: 8,
-    serviceArea: 'Dhanmondi, Dhaka',
-    careerLevel: 'Silver',
-    hourlyRate: 400,
-    basePrice: 300,
+    skills: 'Plumbing, Water Pump Repair',
+    experienceYears: 10,
+    serviceArea: 'Road 9A, Dhanmondi, Dhaka',
+    careerLevel: 'Master',
+    hourlyRate: 500,
+    basePrice: 350,
+    latitude: 23.7461,
+    longitude: 90.3742,
     user: {
-      id: 3,
+      id: 4,
       name: 'Mohammad Rafiq',
       email: 'rafiq@gmail.com',
-      phone: '01733334455',
+      phone: '01511223344',
       role: 'WORKER',
       verified: true,
       rating: 4.9,
       profilePicture: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=150'
+    }
+  },
+  {
+    id: 4,
+    skills: 'AC Repair, HVAC Servicing, Refrigerant Gas Top-up',
+    experienceYears: 8,
+    serviceArea: 'Sector 13, Uttara, Dhaka',
+    careerLevel: 'Master',
+    hourlyRate: 550,
+    basePrice: 400,
+    latitude: 23.8745,
+    longitude: 90.3815,
+    user: {
+      id: 6,
+      name: 'Tariqul Islam',
+      email: 'tariq@gmail.com',
+      phone: '01712345678',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.9,
+      profilePicture: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150'
+    }
+  },
+  {
+    id: 5,
+    skills: 'Electrical, Smart Home Automation, Generator Repair',
+    experienceYears: 5,
+    serviceArea: 'Sector 3, Uttara, Dhaka',
+    careerLevel: 'Gold',
+    hourlyRate: 400,
+    basePrice: 300,
+    latitude: 23.8680,
+    longitude: 90.3910,
+    user: {
+      id: 7,
+      name: 'Tanvir Ahmed',
+      email: 'tanvir@gmail.com',
+      phone: '01823456789',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.7,
+      profilePicture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
+    }
+  },
+  {
+    id: 6,
+    skills: 'Plumbing, Water Pump Repair, Gas Line Fitting',
+    experienceYears: 9,
+    serviceArea: 'Road 71, Gulshan 2, Dhaka',
+    careerLevel: 'Platinum',
+    hourlyRate: 500,
+    basePrice: 350,
+    latitude: 23.7925,
+    longitude: 90.4078,
+    user: {
+      id: 8,
+      name: 'Mahfuzur Rahman',
+      email: 'mahfuz@gmail.com',
+      phone: '01934567890',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.85,
+      profilePicture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150'
+    }
+  },
+  {
+    id: 7,
+    skills: 'House Painting, Wood Polish, Carpentry',
+    experienceYears: 4,
+    serviceArea: 'Section 11, Mirpur, Dhaka',
+    careerLevel: 'Silver',
+    hourlyRate: 350,
+    basePrice: 250,
+    latitude: 23.8150,
+    longitude: 90.3650,
+    user: {
+      id: 9,
+      name: 'Kazi Kabir',
+      email: 'kabir@gmail.com',
+      phone: '01545678901',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.6,
+      profilePicture: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150'
+    }
+  },
+  {
+    id: 8,
+    skills: 'AC Repair, Washing Machine Repair, Microwave Repair',
+    experienceYears: 7,
+    serviceArea: 'Block E, Banani, Dhaka',
+    careerLevel: 'Platinum',
+    hourlyRate: 480,
+    basePrice: 300,
+    latitude: 23.7930,
+    longitude: 90.4040,
+    user: {
+      id: 10,
+      name: 'Shahriar Hossain',
+      email: 'shahriar@gmail.com',
+      phone: '01656789012',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.95,
+      profilePicture: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150'
+    }
+  },
+  {
+    id: 9,
+    skills: 'Washing Machine Repair, Refrigerator Gas Top-up, PCB Repair',
+    experienceYears: 8,
+    serviceArea: 'Block C, Bashundhara R/A, Dhaka',
+    careerLevel: 'Master',
+    hourlyRate: 520,
+    basePrice: 350,
+    latitude: 23.8155,
+    longitude: 90.4250,
+    user: {
+      id: 11,
+      name: 'Farhan Ahmed',
+      email: 'farhan@gmail.com',
+      phone: '01722334455',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.88,
+      profilePicture: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150'
+    }
+  },
+  {
+    id: 10,
+    skills: 'Electrical, CCTV Camera Installation, IPS & UPS Repair',
+    experienceYears: 6,
+    serviceArea: 'Middle Badda, Dhaka',
+    careerLevel: 'Gold',
+    hourlyRate: 420,
+    basePrice: 300,
+    latitude: 23.7850,
+    longitude: 90.4270,
+    user: {
+      id: 12,
+      name: 'Imtiaz Chowdhury',
+      email: 'imtiaz@gmail.com',
+      phone: '01833445566',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.75,
+      profilePicture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'
+    }
+  },
+  {
+    id: 11,
+    skills: 'Gas Stove Burner Fitting, RO Water Purifier Servicing, Kitchen Geyser',
+    experienceYears: 5,
+    serviceArea: 'Kazi Nazrul Islam Road, Mohammadpur, Dhaka',
+    careerLevel: 'Gold',
+    hourlyRate: 400,
+    basePrice: 250,
+    latitude: 23.7590,
+    longitude: 90.3620,
+    user: {
+      id: 13,
+      name: 'Zubaer Rahman',
+      email: 'zubaer@gmail.com',
+      phone: '01944556677',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.82,
+      profilePicture: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150'
+    }
+  },
+  {
+    id: 12,
+    skills: 'Deep House Cleaning, Overhead Water Tank Jet Wash, Sofa Cleaning',
+    experienceYears: 7,
+    serviceArea: 'Tamtola, Khilgaon, Dhaka',
+    careerLevel: 'Platinum',
+    hourlyRate: 380,
+    basePrice: 250,
+    latitude: 23.7520,
+    longitude: 90.4210,
+    user: {
+      id: 14,
+      name: 'Ariful Islam',
+      email: 'arif@gmail.com',
+      phone: '01555667788',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.90,
+      profilePicture: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150'
+    }
+  },
+  {
+    id: 13,
+    skills: 'Roof Damp Leak Proofing, Tile Fitting, Masonry Work',
+    experienceYears: 11,
+    serviceArea: 'Lalbagh Fort Road, Old Dhaka, Dhaka',
+    careerLevel: 'Master',
+    hourlyRate: 450,
+    basePrice: 300,
+    latitude: 23.7180,
+    longitude: 90.3880,
+    user: {
+      id: 15,
+      name: 'Hasan Mahmud',
+      email: 'hasan@gmail.com',
+      phone: '01666778899',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.70,
+      profilePicture: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150'
+    }
+  },
+  {
+    id: 14,
+    skills: 'AC Repair, Inverter Compressor Replacement, Gas Top-up',
+    experienceYears: 9,
+    serviceArea: 'Sector 18, Uttara, Dhaka',
+    careerLevel: 'Platinum',
+    hourlyRate: 550,
+    basePrice: 400,
+    latitude: 23.8920,
+    longitude: 90.3950,
+    user: {
+      id: 16,
+      name: 'Nazmul Huda',
+      email: 'nazmul@gmail.com',
+      phone: '01777889900',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.92,
+      profilePicture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150'
+    }
+  },
+  {
+    id: 15,
+    skills: 'Plumbing, Sewer Line Unclogging, High Pressure Drain Wash',
+    experienceYears: 8,
+    serviceArea: 'Stadium Road, Mirpur 2, Dhaka',
+    careerLevel: 'Gold',
+    hourlyRate: 460,
+    basePrice: 300,
+    latitude: 23.8080,
+    longitude: 90.3610,
+    user: {
+      id: 17,
+      name: 'Biplob Hossain',
+      email: 'biplob@gmail.com',
+      phone: '01888990011',
+      role: 'WORKER',
+      verified: true,
+      rating: 4.80,
+      profilePicture: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150'
     }
   }
 ];
@@ -363,8 +621,18 @@ function App() {
 
   const activeTab = getTabFromPath(location.pathname);
 
+  // Global scroll to top on every route and tab change for all users
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname, location.search, activeTab]);
+
   const setActiveTab = (tab) => {
     const targetPath = getPathFromTab(tab);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
     if (location.pathname !== targetPath) {
       navigate(targetPath);
     }
@@ -386,6 +654,7 @@ function App() {
 
   const [notifications, setNotifications] = useState([]);
   const [savedWorkerIds, setSavedWorkerIds] = useState([]);
+  const [bookingsInitialTab, setBookingsInitialTab] = useState('overview');
   const [properties, setProperties] = useState([]);
   const [addresses, setAddresses] = useState([]);
   const [serviceHistory, setServiceHistory] = useState([]);
@@ -426,7 +695,7 @@ function App() {
     if (savedW) {
       try { setSavedWorkerIds(JSON.parse(savedW)); } catch (e) { setSavedWorkerIds([]); }
     } else {
-      setSavedWorkerIds(isDemoAnis ? [1, 2] : []);
+      setSavedWorkerIds([]);
     }
 
     // Properties
@@ -619,10 +888,43 @@ function App() {
     }
   };
 
+  // Live User Profile Sync (NID approval, verification status, profile picture, etc.)
+  const fetchCurrentUserData = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const res = await fetch(`${API_BASE}/auth/users/${currentUser.id}`);
+      if (res.ok) {
+        const freshUser = await res.json();
+        setCurrentUser(prev => {
+          if (!prev) return freshUser;
+          if (
+            prev.nidNumber !== freshUser.nidNumber ||
+            prev.verified !== freshUser.verified ||
+            prev.isVerified !== freshUser.isVerified ||
+            prev.profilePicture !== freshUser.profilePicture ||
+            prev.phone !== freshUser.phone ||
+            prev.name !== freshUser.name ||
+            prev.address !== freshUser.address ||
+            prev.status !== freshUser.status
+          ) {
+            return { ...prev, ...freshUser };
+          }
+          return prev;
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     if (!currentUser?.id) return;
+    fetchCurrentUserData();
     fetchBackendNotifications();
-    const interval = setInterval(fetchBackendNotifications, 4000);
+    const interval = setInterval(() => {
+      fetchCurrentUserData();
+      fetchBackendNotifications();
+    }, 3000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
 
@@ -637,14 +939,102 @@ function App() {
 
   const handleNotificationClick = async (n) => {
     setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
-    try {
-      await fetch(`${API_BASE}/notifications/${n.id}/read`, { method: 'PUT' });
-    } catch (e) {}
-    if (n.title?.includes('Offer') || n.title?.includes('Post')) {
-      setShowPostedProblemsModal(true);
-    } else {
-      setActiveTab('my-bookings');
+    if (n.id && typeof n.id === 'number') {
+      try {
+        await fetch(`${API_BASE}/notifications/${n.id}/read`, { method: 'PUT' });
+      } catch (e) {}
     }
+
+    const title = (n.title || '').toLowerCase();
+    const msg = (n.message || '').toLowerCase();
+    const type = (n.type || '').toUpperCase();
+
+    // 1. Worker Role: Always route to Worker Dashboard
+    if (currentUser?.role === 'WORKER') {
+      setShowPostedProblemsModal(false);
+      setShowPostProblemModal(false);
+      setActiveTab('worker');
+      return;
+    }
+
+    // 2. Admin Role: Always route to Admin Dashboard
+    if (currentUser?.role === 'ADMIN') {
+      setShowPostedProblemsModal(false);
+      setShowPostProblemModal(false);
+      setActiveTab('admin');
+      return;
+    }
+
+    // 3. Customer Role: Smart routing based on notification type and topic
+    // A. Explicit Problem Post / Custom Problem Quotes
+    const isProblemPostNotification =
+      type === 'PROBLEM_POST' ||
+      type === 'PROBLEM_OFFER' ||
+      type === 'PROBLEM_POST_OFFER' ||
+      (title.includes('problem') && (title.includes('quote') || title.includes('offer') || title.includes('post'))) ||
+      (msg.includes('problem post') && !title.includes('counter-offer')) ||
+      (title.includes('worker price offer') && msg.includes('problem'));
+
+    if (isProblemPostNotification) {
+      setShowPostedProblemsModal(true);
+      return;
+    }
+
+    // B. Tool Store & Orders
+    const isStoreNotification =
+      type.includes('STORE') ||
+      type.includes('ORDER') ||
+      type.includes('PRODUCT') ||
+      type.includes('TOOL') ||
+      title.includes('store') ||
+      title.includes('order') ||
+      title.includes('tool rental') ||
+      title.includes('product');
+
+    if (isStoreNotification) {
+      setShowPostedProblemsModal(false);
+      setShowPostProblemModal(false);
+      setActiveTab('marketplace');
+      return;
+    }
+
+    // C. Academy / Courses
+    const isAcademyNotification =
+      type.includes('COURSE') ||
+      type.includes('ACADEMY') ||
+      type.includes('ENROLLMENT') ||
+      type.includes('CERTIFICATE') ||
+      title.includes('course') ||
+      title.includes('academy') ||
+      title.includes('lesson') ||
+      title.includes('certificate');
+
+    if (isAcademyNotification) {
+      setShowPostedProblemsModal(false);
+      setShowPostProblemModal(false);
+      setActiveTab('courses');
+      return;
+    }
+
+    // D. Profile & Settings
+    const isProfileNotification =
+      type.includes('REWARD') ||
+      type.includes('PROFILE') ||
+      title.includes('points earned') ||
+      title.includes('tier upgrade') ||
+      title.includes('profile updated');
+
+    if (isProfileNotification) {
+      setShowPostedProblemsModal(false);
+      setShowPostProblemModal(false);
+      setActiveTab('profile');
+      return;
+    }
+
+    // E. Bookings (Direct bookings, Counter Offers, Confirmations, En-route, Arrival, In-progress, Payments, Reviews, Refunds)
+    setShowPostedProblemsModal(false);
+    setShowPostProblemModal(false);
+    setActiveTab('my-bookings');
   };
   const [locationMode, setLocationMode] = useState('gps'); // 'gps' or 'manual'
   const [isGpsLoading, setIsGpsLoading] = useState(false);
@@ -696,10 +1086,57 @@ function App() {
     { label: 'All Areas', value: 999 }
   ];
   const CATEGORY_CHIPS = ['All', 'HVAC & AC', 'Plumbing', 'Electrical', 'Painting', 'Smart Home', 'Carpentry'];
-  const customerLocation = {
+  
+  const [customerLocation, setCustomerLocation] = useState({
     lat: currentUser?.latitude || 23.8759,
     lon: currentUser?.longitude || 90.3795,
-    address: currentUser?.address || 'Uttara Sector 12, Dhaka'
+    address: currentUser?.address || 'House 14, Road 4, Sector 12, Uttara, Dhaka'
+  });
+  const [isCustomerLocating, setIsCustomerLocating] = useState(false);
+
+  // Sync customer location if user profile updates
+  useEffect(() => {
+    if (currentUser?.latitude && currentUser?.longitude) {
+      setCustomerLocation({
+        lat: currentUser.latitude,
+        lon: currentUser.longitude,
+        address: currentUser.address || 'Dhaka, Bangladesh'
+      });
+    }
+  }, [currentUser?.latitude, currentUser?.longitude, currentUser?.address]);
+
+  const handleDetectCustomerGps = () => {
+    if (!("geolocation" in navigator)) {
+      showToast("Not Supported", "Geolocation is not supported by your browser.", "error");
+      return;
+    }
+    setIsCustomerLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        setIsCustomerLocating(false);
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        let addr = `GPS Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16`);
+          if (res.ok) {
+            const data = await res.json();
+            const a = data.address || {};
+            const resolved = [a.suburb || a.neighbourhood || a.residential || a.road, a.city || 'Dhaka'].filter(Boolean).join(', ');
+            if (resolved) addr = resolved;
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+        setCustomerLocation({ lat, lon, address: addr });
+        showToast("Location Updated", `Discovery radar centered at ${addr}.`, "success");
+      },
+      (err) => {
+        setIsCustomerLocating(false);
+        showToast("GPS Error", "Could not get device GPS location. Please allow browser location permissions.", "error");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   // Counter-offer state (Worker)
@@ -729,30 +1166,49 @@ function App() {
 
   // Fetch initial base data on load
   useEffect(() => {
-    fetchWorkers();
+    fetchWorkers(customerLocation.lat, customerLocation.lon, selectedRadius, selectedCategory, skillSearchQuery);
     fetchCourses();
     fetchMarketplace();
     fetchAllUsers();
   }, []);
 
-  // Fetch role-specific data when user logs in or switches tabs
+  // Re-fetch nearby workers when location, radius, category, or search changes
   useEffect(() => {
-    if (!isLoggedIn || !currentUser) return;
+    fetchWorkers(customerLocation.lat, customerLocation.lon, selectedRadius, selectedCategory, skillSearchQuery);
+  }, [customerLocation.lat, customerLocation.lon, selectedRadius, selectedCategory, skillSearchQuery]);
 
-    if (currentUser.role === 'CUSTOMER') {
-      fetchCustomerBookings();
-    } else if (currentUser.role === 'WORKER') {
-      fetchWorkerProfileAndBookings(currentUser.id);
-    } else if (currentUser.role === 'ADMIN') {
-      fetchAdminData();
-    }
-  }, [isLoggedIn, currentUser, activeTab]);
-
-  const fetchWorkers = async () => {
+  const fetchWorkers = async (lat, lon, radius, cat, q) => {
     try {
-      const res = await fetch(`${API_BASE}/workers`);
-      const data = await res.json();
-      setWorkers(data);
+      let url = `${API_BASE}/workers/nearby?`;
+      if (lat && lon) {
+        url += `lat=${lat}&lon=${lon}&`;
+      }
+      if (radius && radius < 900) {
+        url += `radius=${radius}&`;
+      }
+      if (cat && cat !== 'All') {
+        url += `category=${encodeURIComponent(cat)}&`;
+      }
+      if (q && q.trim()) {
+        url += `query=${encodeURIComponent(q.trim())}&`;
+      }
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setWorkers(data);
+          return;
+        }
+      }
+      // Fallback to /api/workers
+      const fallbackRes = await fetch(`${API_BASE}/workers`);
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+          setWorkers(fallbackData);
+        }
+      }
     } catch (e) {
       console.error("Error fetching workers", e);
     }
@@ -886,33 +1342,38 @@ function App() {
     }
   };
 
-  // Login handler - No DB required, allows instant login for any email or empty input
-  const handleLogin = (e) => {
+  // Login handler
+  const handleLogin = async (e) => {
     if (e) e.preventDefault();
     setAuthError('');
+    if (!email || !password) {
+      setAuthError('Please enter both email and password.');
+      return;
+    }
 
-    let defaultName = loginRole === 'ADMIN' ? 'System Admin' : loginRole === 'WORKER' ? 'Kamrul Islam (Technician)' : 'Anisur Rahman';
-    let defaultEmail = email || (loginRole === 'ADMIN' ? 'admin@skillverse.com' : loginRole === 'WORKER' ? 'kamrul@gmail.com' : 'anis@gmail.com');
-    let defaultPic = loginRole === 'ADMIN' 
-      ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' 
-      : loginRole === 'WORKER' 
-      ? 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=150'
-      : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150';
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: loginRole })
+      });
 
-    const user = {
-      id: loginRole === 'ADMIN' ? 1 : loginRole === 'WORKER' ? 2 : 3,
-      name: defaultName,
-      email: defaultEmail,
-      phone: '01711112233',
-      role: loginRole,
-      verified: true,
-      profilePicture: defaultPic
-    };
-
-    localStorage.setItem('fixconnect_user', JSON.stringify(user));
-    setCurrentUser(user);
-    setIsLoggedIn(true);
-    setActiveTab(loginRole === 'ADMIN' ? 'admin' : loginRole === 'WORKER' ? 'worker' : 'customer');
+      if (res.ok) {
+        const user = await res.json();
+        if (user.role !== loginRole) {
+          setAuthError('Wrong username or password');
+          return;
+        }
+        setAuthError('');
+        setCurrentUser(user);
+        setIsLoggedIn(true);
+        setActiveTab(user.role === 'ADMIN' ? 'admin' : user.role === 'WORKER' ? 'worker' : 'customer');
+      } else {
+        setAuthError('Wrong username or password');
+      }
+    } catch (e) {
+      setAuthError('Could not connect to server. Check Spring Boot!');
+    }
   };
 
   // Google Login / Signup Simulator
@@ -1192,12 +1653,22 @@ function App() {
 
   // Customer Management Handlers
   const handleToggleSaveWorker = (workerId) => {
+    const numericId = Number(workerId);
     setSavedWorkerIds(prev => {
-      if (prev.includes(workerId)) {
-        return prev.filter(id => id !== workerId);
+      const prevNumeric = (prev || []).map(Number);
+      let updated;
+      if (prevNumeric.includes(numericId)) {
+        updated = prevNumeric.filter(id => id !== numericId);
       } else {
-        return [...prev, workerId];
+        updated = [...prevNumeric, numericId];
       }
+      try {
+        if (currentUser) {
+          localStorage.setItem(getUserKey('saved_workers', currentUser), JSON.stringify(updated));
+        }
+        localStorage.removeItem('skillverse_saved_technicians');
+      } catch (e) {}
+      return updated;
     });
   };
 
@@ -1275,38 +1746,67 @@ function App() {
   };
 
   const handleUpdateProfile = async (updatedProfile) => {
-    setCurrentUser(prev => ({
-      ...prev,
-      ...updatedProfile
-    }));
-    // Persist to backend
-    if (currentUser?.id) {
-      try {
-        await fetch(`${API_BASE}/auth/users/${currentUser.id}`, {
+    if (!currentUser?.id) return;
+    try {
+      // Separate NID from the payload - NID changes go through admin approval
+      const { nidNumber: requestedNid, ...profileWithoutNid } = updatedProfile;
+      const isNidChanged = currentUser?.nidNumber
+        ? (requestedNid && requestedNid.trim() !== (currentUser.nidNumber || '').trim())
+        : Boolean(requestedNid && requestedNid.trim());
+
+      // Build the payload: include nidNumber only if changed (backend creates verification request, does NOT save it directly)
+      const payload = { ...profileWithoutNid };
+      if (isNidChanged && requestedNid) {
+        payload.nidNumber = requestedNid;
+      }
+
+      const userRes = await fetch(`${API_BASE}/auth/users/${currentUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (userRes.ok) {
+        const updatedUser = await userRes.json();
+        // Merge backend response - note: NID on the user object remains unchanged until admin approves
+        setCurrentUser(prev => ({ ...prev, ...updatedUser }));
+      } else {
+        // Fallback: update local state but keep existing NID (don't locally set a pending NID)
+        const { nidNumber: _nid, ...safeProfile } = updatedProfile;
+        setCurrentUser(prev => ({ ...prev, ...safeProfile }));
+      }
+
+      if (currentUser.role === 'WORKER') {
+        await fetch(`${API_BASE}/workers/${currentUser.id}/profile`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedProfile)
+          body: JSON.stringify({
+            skills: updatedProfile.skills || workerProfile?.skills,
+            hourlyRate: updatedProfile.hourlyRate != null ? updatedProfile.hourlyRate : workerProfile?.hourlyRate,
+            basePrice: updatedProfile.basePrice != null ? updatedProfile.basePrice : workerProfile?.basePrice,
+            latitude: updatedProfile.latitude != null ? updatedProfile.latitude : currentUser.latitude,
+            longitude: updatedProfile.longitude != null ? updatedProfile.longitude : currentUser.longitude,
+            serviceArea: updatedProfile.address || workerProfile?.serviceArea || currentUser.address,
+            available: true
+          })
         });
-        // If worker, also sync worker profile
-        if (currentUser.role === 'WORKER' && (updatedProfile.skills || updatedProfile.hourlyRate || updatedProfile.basePrice || updatedProfile.latitude)) {
-          await fetch(`${API_BASE}/workers/${currentUser.id}/profile`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              skills: updatedProfile.skills || workerProfile?.skills,
-              hourlyRate: updatedProfile.hourlyRate || workerProfile?.hourlyRate,
-              basePrice: updatedProfile.basePrice || workerProfile?.basePrice || 300,
-              latitude: updatedProfile.latitude,
-              longitude: updatedProfile.longitude,
-              serviceArea: updatedProfile.address || workerProfile?.serviceArea,
-              available: true
-            })
-          });
-          fetchWorkerProfileAndBookings(currentUser.id);
-        }
-      } catch (e) {
-        console.error('Profile update failed', e);
+        fetchWorkerProfileAndBookings(currentUser.id);
       }
+
+      // Sync across all views (Customer, Worker, Admin) - pass current filter params
+      fetchWorkers(customerLocation.lat, customerLocation.lon, selectedRadius, selectedCategory, skillSearchQuery);
+      if (currentUser.role === 'ADMIN' || activeTab === 'admin') {
+        fetchAdminData();
+      }
+
+      if (isNidChanged) {
+        showToast("Profile Saved!", "Your profile has been updated. NID change request has been submitted to Admin for review & approval.", "success");
+      } else {
+        showToast("Profile Saved!", "Your profile information has been updated and synced system-wide.", "success");
+      }
+    } catch (e) {
+      console.error('Profile update failed', e);
+      showToast("Update Error", "Could not save profile changes.", "error");
     }
   };
 
@@ -2017,38 +2517,20 @@ function App() {
               </div>
             </div>
 
-            {/* 1-Click Instant Demo Login Buttons */}
-            {authMode === 'login' && (
-              <div style={{ marginBottom: '1.2rem', padding: '0.85rem', background: 'var(--bg-card-hover)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', textAlign: 'center' }}>
-                  ⚡ 1-Click Instant Login (No Password Required)
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem', justifyContent: 'center' }}
-                    onClick={() => triggerAutofillLogin('CUSTOMER', 'anis@gmail.com')}
-                  >
-                    👤 Login as Customer (Anisur Rahman)
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem', justifyContent: 'center' }}
-                    onClick={() => triggerAutofillLogin('WORKER', 'kamrul@gmail.com')}
-                  >
-                    🛠️ Login as Technician (Kamrul Islam)
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem', justifyContent: 'center' }}
-                    onClick={() => triggerAutofillLogin('ADMIN', 'admin@skillverse.com')}
-                  >
-                    👑 Login as Admin (System Administrator)
-                  </button>
-                </div>
+            {/* Inline Red Error Message (No popup alert) */}
+            {authError && (
+              <div style={{
+                color: '#ef4444',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '0.65rem 1rem',
+                marginBottom: '1rem',
+                fontSize: '0.85rem',
+                fontWeight: 'bold',
+                textAlign: 'center'
+              }}>
+                ⚠️ {authError}
               </div>
             )}
 
@@ -2320,10 +2802,30 @@ function App() {
 
           {/* Service Booking & Active Service Grid */}
           <div style={{ padding: '0 2rem' }}>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Compass size={22} color="var(--primary)" />
-              Match Verified Technicians
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.5rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Compass size={22} color="var(--primary)" />
+                Match Verified Technicians
+              </h2>
+
+              {/* Customer Location Bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(255,255,255,0.02)', padding: '0.4rem 0.8rem', borderRadius: '12px', border: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  <MapPin size={14} color="#10b981" />
+                  <span>Center: <strong style={{ color: 'var(--text-heading)' }}>{customerLocation.address || 'Uttara, Dhaka'}</strong></span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.3)' }}
+                  onClick={handleDetectCustomerGps}
+                  disabled={isCustomerLocating}
+                >
+                  <Navigation size={12} className={isCustomerLocating ? 'animate-spin' : ''} />
+                  {isCustomerLocating ? 'Detecting GPS...' : 'Use My Current Location'}
+                </button>
+              </div>
+            </div>
 
             {/* Skill Keyword Search */}
             <div style={{ marginBottom: '1rem' }}>
@@ -2373,13 +2875,13 @@ function App() {
             {/* Interactive Technician Map */}
             {(() => {
               const filteredSearchWorkers = workers
-                .filter(w => w.user.verified)
+                .filter(w => w.user?.verified)
                 .filter(w => {
                   // Skill / keyword search filter
                   if (skillSearchQuery.trim()) {
                     const q = skillSearchQuery.toLowerCase();
                     const skillMatch = (w.skills || '').toLowerCase().includes(q);
-                    const nameMatch = (w.user.name || '').toLowerCase().includes(q);
+                    const nameMatch = (w.user?.name || '').toLowerCase().includes(q);
                     const areaMatch = (w.serviceArea || '').toLowerCase().includes(q);
                     if (!skillMatch && !nameMatch && !areaMatch) return false;
                   }
@@ -2404,56 +2906,78 @@ function App() {
 
               return (
                 <>
+                  <TechnicianMap
+                    customerLocation={customerLocation}
+                    workers={filteredSearchWorkers}
+                    selectedRadiusKm={selectedRadius}
+                    onSelectWorker={(w) => {
+                      handleOpenBookingModalWithOptions({
+                        worker: w,
+                        serviceType: w.skills.split(',')[0],
+                        suggestedCost: (w.basePrice || 300) * 2
+                      });
+                    }}
+                  />
+
                   {/* Filtered Technician Cards */}
                   <div className="dashboard-grid" style={{ padding: 0, marginBottom: '3rem' }}>
                     {filteredSearchWorkers
                       .filter(w => {
                         // Radius filter (Haversine)
                         if (selectedRadius < 900) {
-                          const wLat = w.latitude || w.user?.latitude || 23.8720;
-                          const wLon = w.longitude || w.user?.longitude || 90.3810;
-                          const dist = calculateDistanceKm(customerLocation.lat, customerLocation.lon, wLat, wLon);
+                          const dist = w.distanceKm != null ? w.distanceKm : calculateDistanceKm(customerLocation.lat, customerLocation.lon, w.latitude || 23.8720, w.longitude || 90.3810);
                           if (dist > selectedRadius) return false;
                         }
                         return true;
                       })
                       .map(w => {
-                        const isSaved = savedWorkerIds.includes(w.id || w.user?.id);
+                        const isSaved = (savedWorkerIds || []).map(Number).includes(Number(w.id));
                         const wLat = w.latitude || w.user?.latitude || 23.8720;
                         const wLon = w.longitude || w.user?.longitude || 90.3810;
-                        const distKm = calculateDistanceKm(customerLocation.lat, customerLocation.lon, wLat, wLon);
+                        const distKm = w.distanceKm != null ? w.distanceKm : calculateDistanceKm(customerLocation.lat, customerLocation.lon, wLat, wLon);
+                        const distStr = w.distanceString || formatDistanceString(distKm);
+
                         return (
                           <div key={w.id} className="glass-card" style={{ cursor: 'pointer' }} onClick={() => setViewingWorker(w)}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                               <div style={{ position: 'relative' }}>
                                 <img
-                                  src={w.user.profilePicture}
-                                  alt={w.user.name}
+                                  src={w.user?.profilePicture || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=150'}
+                                  alt={w.user?.name}
                                   style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(16,185,129,0.3)' }}
                                 />
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <button
-                                  className="technician-card-heart-btn"
-                                  title={isSaved ? "Saved in Profile" : "Save Technician to Profile"}
+                                  className="technician-card-bookmark-btn"
+                                  title={isSaved ? "Saved • Click to unsave" : "Save Technician"}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleToggleSaveWorker(w.id || w.user?.id);
+                                    handleToggleSaveWorker(w.id);
+                                    if (!isSaved) {
+                                      showToast("Technician Saved", `⭐ ${w.user?.name || 'Technician'} added to your Saved Technicians list.`, "success");
+                                    } else {
+                                      showToast("Technician Removed", `Removed ${w.user?.name || 'Technician'} from your Saved Technicians.`, "info");
+                                    }
                                   }}
                                 >
-                                  <Heart size={16} color={isSaved ? "var(--accent-rose)" : "var(--text-muted)"} fill={isSaved ? "var(--accent-rose)" : "transparent"} />
+                                  {isSaved ? (
+                                    <BookmarkCheck size={16} color="var(--primary)" fill="var(--primary)" />
+                                  ) : (
+                                    <Bookmark size={16} color="var(--text-muted)" />
+                                  )}
                                 </button>
                                 <span className="badge badge-verified">Verified Worker</span>
                               </div>
                             </div>
-                            <h3 style={{ fontSize: '1.1rem', marginBottom: '0.2rem' }}>{w.user.name}</h3>
+                            <h3 style={{ fontSize: '1.1rem', marginBottom: '0.2rem' }}>{w.user?.name}</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--accent-gold)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                               <Award size={14} />
-                              <span>Rating: {w.user.rating} ({w.careerLevel} Rank)</span>
+                              <span>Rating: {w.user?.rating || 4.8} ({w.careerLevel || 'Gold'} Rank)</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>
                               <MapPin size={13} />
-                              <span style={{ fontWeight: 'bold' }}>{formatDistanceString(distKm)}</span>
+                              <span style={{ fontWeight: 'bold' }}>{distStr}</span>
                               <span style={{ color: 'var(--text-muted)' }}>• {w.serviceArea}</span>
                             </div>
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
@@ -2544,10 +3068,14 @@ function App() {
         <MyBookingsHub
           currentUser={currentUser}
           rewards={rewards}
+          initialTab={bookingsInitialTab}
+          workers={workers}
+          savedWorkerIds={savedWorkerIds}
+          onToggleSaveWorker={handleToggleSaveWorker}
           onAddPoints={(pts) => setRewards(prev => ({ ...prev, points: (prev.points || 0) + pts }))}
           onShowToast={(title, msg, type) => showToast(title, msg, type)}
           onNavigateToWorkerProfile={(workerId) => {
-            const w = workers.find(item => item.user?.id === workerId || item.id === workerId);
+            const w = workers.find(item => Number(item.id) === Number(workerId) || Number(item.user?.id) === Number(workerId));
             if (w) setViewingWorker(w);
           }}
         />

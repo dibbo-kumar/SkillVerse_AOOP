@@ -1,34 +1,42 @@
 package com.skillverse.model;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "course_enrollments")
 public class CourseEnrollment {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private Long userId;
     private Long courseId;
+
     private String paymentStatus; // FREE, PENDING, SUCCESSFUL, FAILED
     private String paymentMethod; // BKASH, NAGAD, ROCKET, CARD, NONE
     private String transactionId;
     private Double amountPaid;
-    private Integer progressPercentage;
-    private Boolean isCompleted;
-    private String certificateUrl;
-    private LocalDateTime enrolledAt;
 
-    public CourseEnrollment() {
-        this.progressPercentage = 0;
-        this.isCompleted = false;
-        this.enrolledAt = LocalDateTime.now();
-    }
+    private Integer progressPercentage = 0;
+    private Integer completedLessonsCount = 0;
+    private Long lastWatchedLessonId;
+    private String completedLessonIds; // e.g. "1,2,5"
+    private Boolean isCompleted = false;
 
-    public CourseEnrollment(Long id, Long userId, Long courseId, String paymentStatus, String paymentMethod, Double amountPaid) {
-        this();
-        this.id = id;
+    private LocalDateTime enrolledAt = LocalDateTime.now();
+    private LocalDateTime completedAt;
+    private LocalDateTime lastAccessedAt = LocalDateTime.now();
+
+    public CourseEnrollment() {}
+
+    public CourseEnrollment(Long userId, Long courseId, String paymentStatus, String paymentMethod, String transactionId, Double amountPaid) {
         this.userId = userId;
         this.courseId = courseId;
         this.paymentStatus = paymentStatus;
         this.paymentMethod = paymentMethod;
+        this.transactionId = transactionId;
         this.amountPaid = amountPaid;
     }
 
@@ -56,12 +64,24 @@ public class CourseEnrollment {
     public Integer getProgressPercentage() { return progressPercentage; }
     public void setProgressPercentage(Integer progressPercentage) { this.progressPercentage = progressPercentage; }
 
+    public Integer getCompletedLessonsCount() { return completedLessonsCount; }
+    public void setCompletedLessonsCount(Integer completedLessonsCount) { this.completedLessonsCount = completedLessonsCount; }
+
+    public Long getLastWatchedLessonId() { return lastWatchedLessonId; }
+    public void setLastWatchedLessonId(Long lastWatchedLessonId) { this.lastWatchedLessonId = lastWatchedLessonId; }
+
+    public String getCompletedLessonIds() { return completedLessonIds; }
+    public void setCompletedLessonIds(String completedLessonIds) { this.completedLessonIds = completedLessonIds; }
+
     public Boolean getIsCompleted() { return isCompleted; }
     public void setIsCompleted(Boolean isCompleted) { this.isCompleted = isCompleted; }
 
-    public String getCertificateUrl() { return certificateUrl; }
-    public void setCertificateUrl(String certificateUrl) { this.certificateUrl = certificateUrl; }
-
     public LocalDateTime getEnrolledAt() { return enrolledAt; }
     public void setEnrolledAt(LocalDateTime enrolledAt) { this.enrolledAt = enrolledAt; }
+
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+
+    public LocalDateTime getLastAccessedAt() { return lastAccessedAt; }
+    public void setLastAccessedAt(LocalDateTime lastAccessedAt) { this.lastAccessedAt = lastAccessedAt; }
 }

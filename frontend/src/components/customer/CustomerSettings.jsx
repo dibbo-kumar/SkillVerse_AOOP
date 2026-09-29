@@ -28,6 +28,8 @@ import {
   Sparkles
 } from 'lucide-react';
 
+import LocationPickerModal from '../common/LocationPickerModal';
+
 export default function CustomerSettings({
   user,
   workerProfile,
@@ -38,6 +40,13 @@ export default function CustomerSettings({
   onThemeChange
 }) {
   const [activeTab, setActiveTab] = useState('personal'); // personal, location, theme, security, notifications, language, privacy, help
+
+  // Scroll to top when switching settings tabs
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeTab]);
 
   const isWorker = user?.role === 'WORKER';
 
@@ -55,10 +64,12 @@ export default function CustomerSettings({
   const [profileSaved, setProfileSaved] = useState(false);
 
   // Location GPS Form
-  const [latitude, setLatitude] = useState(user?.latitude ?? (isWorker ? 23.8720 : ''));
-  const [longitude, setLongitude] = useState(user?.longitude ?? (isWorker ? 90.3810 : ''));
-  const [serviceArea, setServiceArea] = useState(workerProfile?.serviceArea || user?.address || '');
+  const [latitude, setLatitude] = useState(user?.latitude ?? (isWorker ? 23.8720 : 23.8759));
+  const [longitude, setLongitude] = useState(user?.longitude ?? (isWorker ? 90.3810 : 90.3795));
+  const [serviceArea, setServiceArea] = useState(workerProfile?.serviceArea || user?.address || 'Uttara Sector 12, Dhaka');
   const [locationSaved, setLocationSaved] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -136,6 +147,13 @@ export default function CustomerSettings({
     }
   };
 
+  const validateBdPhone = (num) => {
+    if (!num) return true;
+    const clean = num.trim();
+    if (clean.length === 0) return true;
+    return /^(\+88)?01[3-9]\d{8}$/.test(clean) || /^\d{10,14}$/.test(clean);
+  };
+
   const handleSaveProfile = (e) => {
     e.preventDefault();
     if (!validateBdPhone(phone)) {
@@ -143,6 +161,9 @@ export default function CustomerSettings({
       return;
     }
     setPhoneError("");
+
+    const isNidChanged = user?.nidNumber ? (nidNumber && nidNumber.trim() !== user.nidNumber.trim()) : Boolean(nidNumber && nidNumber.trim());
+
     if (onUpdateProfile) {
       onUpdateProfile({
         name,
@@ -158,8 +179,12 @@ export default function CustomerSettings({
         basePrice: Number(basePrice)
       });
     }
+
     setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 3000);
+    if (isNidChanged) {
+      alert("ℹ️ Personal details updated! Since you changed your NID Number, an NID Verification Request has been submitted to Admin for review & approval.");
+    }
+    setTimeout(() => setProfileSaved(false), 4000);
   };
 
   const handleSaveLocation = (e) => {
@@ -180,17 +205,52 @@ export default function CustomerSettings({
 
   const handleGetBrowserLocation = () => {
     if ("geolocation" in navigator) {
+      setIsDetectingGps(true);
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          setLatitude(Number(lat.toFixed(4)));
-          setLongitude(Number(lon.toFixed(4)));
-          alert(`📍 Real Device GPS Acquired! Latitude: ${lat.toFixed(4)}, Longitude: ${lon.toFixed(4)}`);
+        async (position) => {
+          const lat = Number(position.coords.latitude.toFixed(5));
+          const lon = Number(position.coords.longitude.toFixed(5));
+          setLatitude(lat);
+          setLongitude(lon);
+
+          let resolvedArea = serviceArea;
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16`);
+            if (res.ok) {
+              const data = await res.json();
+              const addr = data.address || {};
+              resolvedArea = [addr.suburb || addr.neighbourhood || addr.residential || addr.road, addr.city || 'Dhaka'].filter(Boolean).join(', ');
+              if (resolvedArea) {
+                setServiceArea(resolvedArea);
+              }
+            }
+          } catch (e) {
+            console.warn("Reverse geocode error:", e);
+          } finally {
+            setIsDetectingGps(false);
+          }
+
+          const finalArea = resolvedArea || serviceArea || 'Current GPS Location';
+
+          if (onUpdateWorkerLocation) {
+            onUpdateWorkerLocation(lat, lon, finalArea);
+          }
+          if (onUpdateProfile) {
+            onUpdateProfile({
+              latitude: lat,
+              longitude: lon,
+              address: finalArea
+            });
+          }
+
+          setLocationSaved(true);
+          setTimeout(() => setLocationSaved(false), 3000);
         },
         (error) => {
-          alert(`Could not fetch device GPS: ${error.message}. Please enter coordinates manually or use neighborhood presets.`);
-        }
+          setIsDetectingGps(false);
+          alert(`Could not fetch device GPS: ${error.message}. Please select your location on the map.`);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       alert("Geolocation API is not supported by your browser.");
@@ -497,74 +557,107 @@ export default function CustomerSettings({
               )}
 
               <form onSubmit={handleSaveLocation}>
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label className="form-label">Area / Location Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={serviceArea}
-                    onChange={(e) => setServiceArea(e.target.value)}
-                    placeholder="e.g. Sector 12, Uttara, Dhaka"
-                    required
-                  />
+                <div style={{
+                  background: 'rgba(16, 185, 129, 0.05)',
+                  padding: '1.25rem',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Compass size={18} color="#10b981" />
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-heading)' }}>
+                          {isWorker ? 'Technician Service Dispatch Coordinates' : 'Primary Location Coordinates'}
+                        </h4>
+                      </div>
+                      <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {isWorker ? 'Pinned base coordinates for matching nearby customers.' : 'Used to measure distances to nearby service providers.'}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={handleGetBrowserLocation}
+                        disabled={isDetectingGps}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.45rem 0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          borderColor: 'rgba(16, 185, 129, 0.3)',
+                          color: '#34d399'
+                        }}
+                      >
+                        <Compass size={13} className={isDetectingGps ? 'animate-spin' : ''} />
+                        {isDetectingGps ? 'Detecting GPS...' : 'Use My Current Location'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setShowLocationModal(true)}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.45rem 0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'linear-gradient(90deg, #10b981, #059669)'
+                        }}
+                      >
+                        <MapPin size={13} />
+                        Select Location on Map
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Read-only Location readout */}
+                  <div style={{
+                    background: 'rgba(5, 10, 20, 0.6)',
+                    padding: '0.8rem 1rem',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border-color)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.6rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '200px' }}>
+                      <MapPin size={16} color="#10b981" />
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.85rem', background: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed' }}
+                        value={serviceArea || ''}
+                        readOnly
+                        placeholder="Location address will be automatically detected via the buttons above"
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                        Lat: {Number(latitude || 23.8759).toFixed(5)}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                        Lon: {Number(longitude || 90.3795).toFixed(5)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                  <div>
-                    <label className="form-label">GPS Latitude</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      className="form-input"
-                      value={latitude}
-                      onChange={(e) => setLatitude(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="form-label">GPS Longitude</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      className="form-input"
-                      value={longitude}
-                      onChange={(e) => setLongitude(e.target.value)}
-                      required
-                    />
-                  </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Check size={14} color="#10b981" /> Coordinates & service area update automatically when using either button above.
                 </div>
-
-                <div style={{ background: 'rgba(59, 130, 246, 0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <strong style={{ color: 'var(--accent-blue)' }}>📍 Preset Coordinates & Real Device GPS:</strong>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}
-                      onClick={handleGetBrowserLocation}
-                    >
-                      <Compass size={13} /> Auto-Detect Device GPS
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => { setLatitude(23.8759); setLongitude(90.3795); setServiceArea("Uttara Sector 12, Dhaka"); }}>
-                      Uttara (23.8759, 90.3795)
-                    </button>
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => { setLatitude(23.7925); setLongitude(90.4078); setServiceArea("Gulshan 2, Dhaka"); }}>
-                      Gulshan (23.7925, 90.4078)
-                    </button>
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => { setLatitude(23.7461); setLongitude(90.3742); setServiceArea("Dhanmondi Road 9A, Dhaka"); }}>
-                      Dhanmondi (23.7461, 90.3742)
-                    </button>
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => { setLatitude(23.8050); setLongitude(90.3680); setServiceArea("Mirpur 10, Dhaka"); }}>
-                      Mirpur (23.8050, 90.3680)
-                    </button>
-                  </div>
-                </div>
-
-                <button type="submit" className="btn btn-primary">
-                  Update & Broadcast GPS Location
-                </button>
               </form>
             </div>
           )}
@@ -588,7 +681,7 @@ export default function CustomerSettings({
 
               {/* Visual Theme Selection Cards Grid */}
               <div className="theme-selection-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginTop: '1.5rem', marginBottom: '2rem' }}>
-                
+
                 {/* 1. PROFESSIONAL SLATE LIGHT THEME (PRIMARY / DEFAULT) */}
                 <div
                   className={`theme-selection-card ${currentTheme === 'light' ? 'active-theme' : ''}`}
@@ -978,6 +1071,35 @@ export default function CustomerSettings({
           )}
         </div>
       </div>
+
+      {/* --- REUSABLE LOCATION PICKER MODAL --- */}
+      <LocationPickerModal
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        initialLat={Number(latitude) || 23.8759}
+        initialLon={Number(longitude) || 90.3795}
+        initialAddress={serviceArea}
+        title={isWorker ? "Set Dispatch Service Base" : "Set Your Location Point"}
+        description={isWorker ? "Pin where you provide services. Nearby customers will discover you." : "Pin your location to discover nearby technicians within your search radius."}
+        onConfirm={(loc) => {
+          setLatitude(loc.lat);
+          setLongitude(loc.lon);
+          const finalAddr = loc.address || serviceArea;
+          if (loc.address) setServiceArea(loc.address);
+          if (onUpdateWorkerLocation) {
+            onUpdateWorkerLocation(loc.lat, loc.lon, finalAddr);
+          }
+          if (onUpdateProfile) {
+            onUpdateProfile({
+              latitude: loc.lat,
+              longitude: loc.lon,
+              address: finalAddr
+            });
+          }
+          setLocationSaved(true);
+          setTimeout(() => setLocationSaved(false), 3000);
+        }}
+      />
     </div>
   );
 }

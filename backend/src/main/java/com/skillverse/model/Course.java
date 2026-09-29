@@ -1,12 +1,21 @@
 package com.skillverse.model;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "courses")
 public class Course {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String title;
+    
+    @Column(length = 2000)
     private String description;
+    
     private String instructor;
     private String category; // Communication, Electrical, HVAC, Plumbing, Safety, Smart Home
     private String level;    // Beginner, Intermediate, Advanced
@@ -15,27 +24,33 @@ public class Course {
     private Double rating;
     private Integer enrollmentCount;
     private Boolean isFree;
-    private Double price;
+    private Double price;    // in BDT (৳)
     private String image;
-    private String syllabusDocumentUrl;
-    private LocalDateTime createdAt;
+    private Boolean isPublished = true;
+    private String language = "Bengali / English";
+    private Boolean certificateAvailable = true;
+    
+    @Column(length = 2000)
+    private String whatYouWillLearn;
+    
+    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime updatedAt = LocalDateTime.now();
 
-    public Course() {
-        this.rating = 4.8;
-        this.enrollmentCount = 0;
-        this.isFree = false;
-        this.createdAt = LocalDateTime.now();
-    }
+    public Course() {}
 
-    public Course(Long id, String title, String description, String instructor, String category, String level, Double price) {
-        this();
-        this.id = id;
+    public Course(String title, String description, String instructor, String category, String level, String duration, Integer lessonsCount, Double rating, Integer enrollmentCount, Boolean isFree, Double price, String image) {
         this.title = title;
         this.description = description;
         this.instructor = instructor;
         this.category = category;
         this.level = level;
+        this.duration = duration;
+        this.lessonsCount = lessonsCount;
+        this.rating = rating;
+        this.enrollmentCount = enrollmentCount;
+        this.isFree = isFree;
         this.price = price;
+        this.image = image;
     }
 
     public Long getId() { return id; }
@@ -77,9 +92,21 @@ public class Course {
     public String getImage() { return image; }
     public void setImage(String image) { this.image = image; }
 
-    public String getSyllabusDocumentUrl() { return syllabusDocumentUrl; }
-    public void setSyllabusDocumentUrl(String syllabusDocumentUrl) { this.syllabusDocumentUrl = syllabusDocumentUrl; }
+    public Boolean getIsPublished() { return isPublished; }
+    public void setIsPublished(Boolean isPublished) { this.isPublished = isPublished; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+
+    public Boolean getCertificateAvailable() { return certificateAvailable; }
+    public void setCertificateAvailable(Boolean certificateAvailable) { this.certificateAvailable = certificateAvailable; }
+
+    public String getWhatYouWillLearn() { return whatYouWillLearn; }
+    public void setWhatYouWillLearn(String whatYouWillLearn) { this.whatYouWillLearn = whatYouWillLearn; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

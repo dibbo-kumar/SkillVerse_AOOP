@@ -1,44 +1,45 @@
 package com.skillverse.model;
 
-import java.time.LocalDateTime;
+import jakarta.persistence.*;
 
+@Entity
+@Table(name = "users")
 public class User {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String name;
     private String email;
     private String phone;
     private String role; // CUSTOMER, WORKER, ADMIN
     private String nidNumber;
     private boolean isVerified;
+    @Column(columnDefinition = "TEXT")
     private String profilePicture;
-    private Double rating;
+    private Double rating = 5.0;
     private Double latitude;
     private Double longitude;
-    private String address;
-    private String status;
-    private LocalDateTime createdAt;
+    @Column(columnDefinition = "TEXT")
+    private String address = "";
 
-    public User() {
-        this.rating = 5.0;
-        this.status = "ACTIVE";
-        this.createdAt = LocalDateTime.now();
-        this.isVerified = false;
-    }
+    private String status = "ACTIVE"; // ACTIVE, SUSPENDED, DEACTIVATED
+    private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
 
-    public User(Long id, String name, String email, String phone, String role, String address) {
-        this();
-        this.id = id;
+    public User() {}
+
+    public User(String name, String email, String phone, String role) {
         this.name = name;
         this.email = email;
         this.phone = phone;
         this.role = role;
-        this.address = address;
+        this.isVerified = false;
     }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-
+    
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
@@ -72,9 +73,9 @@ public class User {
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
 
-    public String getStatus() { return status; }
+    public String getStatus() { return status != null ? status : "ACTIVE"; }
     public void setStatus(String status) { this.status = status; }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public java.time.LocalDateTime getCreatedAt() { return createdAt != null ? createdAt : java.time.LocalDateTime.now(); }
+    public void setCreatedAt(java.time.LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

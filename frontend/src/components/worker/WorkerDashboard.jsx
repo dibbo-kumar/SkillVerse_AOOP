@@ -4,9 +4,11 @@ import {
   AlertCircle, ShieldCheck, MapPin, Phone, User, Play, Sparkles, Navigation,
   KeyRound, RefreshCw, Layers, ArrowDownRight, Wallet, Award, XCircle,
   Eye, CheckCheck, Star, Camera, FileText, Send, Filter, Search, RotateCcw,
-  ShieldAlert, FileCheck, Check, UploadCloud, ChevronRight, HelpCircle, AlertTriangle
+  ShieldAlert, FileCheck, Check, UploadCloud, ChevronRight, HelpCircle, AlertTriangle,
+  Compass
 } from 'lucide-react';
 import WorkerBookingDetailsModal from './WorkerBookingDetailsModal';
+import LocationPickerModal from '../common/LocationPickerModal';
 
 const API_BASE = "http://localhost:8081/api";
 
@@ -18,6 +20,13 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
   const [wallet, setWallet] = useState(null);
   const [walletTransactions, setWalletTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Scroll to top when switching subtabs in WorkerDashboard
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeSubTab]);
 
   // Selected booking for Details Modal
   const [detailsBooking, setDetailsBooking] = useState(null);
@@ -55,7 +64,11 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
   // Verification State
   const [verifDossier, setVerifDossier] = useState(null);
   const [showVerifModal, setShowVerifModal] = useState(false);
-  const [verifStep, setVerifStep] = useState(1); // 1: Personal, 2: Address, 3: Professional, 4: Payout, 5: Review
+  const [verifStep, setVerifStep] = useState(1); // 1: Personal, 2: Address & Location, 3: Professional, 4: Payout, 5: Review
+
+  // Location Picker State
+  const [showLocationPickerModal, setShowLocationPickerModal] = useState(false);
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
 
   // Phone OTP Verification Simulator state
   const [phoneOtpSent, setPhoneOtpSent] = useState(false);
@@ -79,6 +92,9 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
     cityArea: 'Uttara',
     postalCode: '1230',
     detailedAddress: currentWorker?.address || 'House 14, Road 4, Sector 11, Uttara, Dhaka',
+    serviceArea: currentWorker?.serviceArea || currentWorker?.address || 'Sector 11, Uttara, Dhaka',
+    latitude: currentWorker?.latitude || 23.8720,
+    longitude: currentWorker?.longitude || 90.3810,
     skills: 'AC Repair, Electrical, Plumbing',
     experienceYears: 5,
     experienceDescription: 'Certified technician with hands-on experience in inverter split AC servicing, gas charging, and house electrical wiring.',
@@ -102,6 +118,23 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
     }, 4000);
     return () => clearInterval(interval);
   }, [workerId]);
+
+  useEffect(() => {
+    if (currentWorker) {
+      setVerifForm(prev => ({
+        ...prev,
+        fullName: currentWorker.name || prev.fullName,
+        phone: currentWorker.phone || prev.phone,
+        nidNumber: currentWorker.nidNumber || prev.nidNumber,
+        profileSelfiePhoto: currentWorker.profilePicture || prev.profileSelfiePhoto,
+        presentAddress: currentWorker.address || prev.presentAddress,
+        detailedAddress: currentWorker.address || prev.detailedAddress,
+        serviceArea: currentWorker.serviceArea || currentWorker.address || prev.serviceArea,
+        latitude: currentWorker.latitude || prev.latitude,
+        longitude: currentWorker.longitude || prev.longitude
+      }));
+    }
+  }, [currentWorker]);
 
   const fetchWorkerData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -195,6 +228,31 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
   );
   const hasActiveJob = !!activeJob;
 
+  const activeWarrantyBookings = workerBookings.filter(b =>
+    b.warrantyStatus === 'WARRANTY_CLAIMED' || b.warrantyStatus === 'WARRANTY_ACCEPTED'
+  );
+  const hasActiveWarrantyClaim = activeWarrantyBookings.length > 0;
+
+  const handleAcceptWarranty = async (bId) => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bId}/accept-warranty`, { method: 'PUT' });
+      if (res.ok) {
+        fetchWorkerData();
+        if (onShowToast) onShowToast(
+          "Warranty Claim Accepted!",
+          "You have accepted this free warranty request. Please visit the customer's location to perform the repair. Customer will mark Done upon completion.",
+          "success"
+        );
+      } else {
+        const err = await res.json();
+        if (onShowToast) onShowToast("Error", err.error || "Failed to accept warranty claim.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      if (onShowToast) onShowToast("Error", "Network error accepting warranty claim.", "error");
+    }
+  };
+
   useEffect(() => {
     if (hasActiveJob && activeSubTab === 'requests') {
       setActiveSubTab('active-job');
@@ -253,6 +311,73 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
     reader.readAsDataURL(file);
   };
 
+  const handleUseCurrentLocationForVerif = () => {
+    if (!("geolocation" in navigator)) {
+      if (onShowToast) onShowToast("Not Supported", "Geolocation is not supported by your browser.", "error");
+      return;
+    }
+    setIsDetectingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        setIsDetectingGps(false);
+        const lat = Number(pos.coords.latitude.toFixed(5));
+        const lon = Number(pos.coords.longitude.toFixed(5));
+        setVerifForm(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lon
+        }));
+        let resolvedArea = '';
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16`);
+          if (res.ok) {
+            const data = await res.json();
+            const addr = data.address || {};
+            resolvedArea = [addr.suburb || addr.neighbourhood || addr.residential || addr.road, addr.city || 'Dhaka'].filter(Boolean).join(', ');
+            if (resolvedArea) {
+              setVerifForm(prev => ({ ...prev, serviceArea: resolvedArea }));
+            }
+          }
+        } catch (e) {
+          console.warn("Geocode error", e);
+        }
+        if (workerId) {
+          handleQuickUpdateLocation({ lat, lon, address: resolvedArea || verifForm.serviceArea });
+        }
+        if (onShowToast) onShowToast("GPS Location Captured!", `Service base set to ${resolvedArea || 'Current Spot'} (${lat}, ${lon}).`, "success");
+      },
+      (err) => {
+        setIsDetectingGps(false);
+        if (onShowToast) onShowToast("GPS Warning", "Could not read GPS. You can choose your location on the map.", "warning");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleConfirmLocationPicker = (loc) => {
+    setVerifForm(prev => ({
+      ...prev,
+      latitude: loc.lat,
+      longitude: loc.lon,
+      serviceArea: loc.address || prev.serviceArea
+    }));
+    if (onShowToast) onShowToast("Service Location Updated!", `Set to ${loc.address || 'Selected Map Point'} (${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}).`, "success");
+  };
+
+  const handleQuickUpdateLocation = async (loc) => {
+    try {
+      const res = await fetch(`${API_BASE}/workers/${workerId}/location?lat=${loc.lat}&lon=${loc.lon}&area=${encodeURIComponent(loc.address || '')}`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        if (onShowToast) onShowToast("Service Base Updated!", `New coordinates saved to database: (${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}).`, "success");
+        fetchWorkerData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleSubmitVerification = async (e) => {
     if (e) e.preventDefault();
     try {
@@ -289,6 +414,11 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
       setShowVerifModal(true);
       return;
     }
+    if (hasActiveWarrantyClaim) {
+      if (onShowToast) onShowToast("Warranty Required", "Cannot accept new work. You have an active warranty claim that must be resolved first.", "error");
+      setActiveSubTab('history');
+      return;
+    }
     if (hasActiveJob) {
       if (onShowToast) onShowToast("Worker Busy", "You already have an active job in progress. Complete your current active job before accepting new bookings.", "error");
       return;
@@ -312,6 +442,11 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
     e.preventDefault();
     if (!isWorkerApproved) {
       if (onShowToast) onShowToast("Verification Required", "You must be an approved technician to propose price counter-offers.", "warning");
+      return;
+    }
+    if (hasActiveWarrantyClaim) {
+      if (onShowToast) onShowToast("Warranty Required", "Cannot propose price counters. You have an active warranty claim that must be resolved first.", "error");
+      setActiveSubTab('history');
       return;
     }
     if (!selectedBooking || !counterPrice) return;
@@ -442,6 +577,11 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
     if (!isWorkerApproved) {
       if (onShowToast) onShowToast("Verification Required", "Your account is not approved yet. Complete ID verification to quote on problem posts.", "warning");
       setShowVerifModal(true);
+      return;
+    }
+    if (hasActiveWarrantyClaim) {
+      if (onShowToast) onShowToast("Warranty Required", "Cannot quote on problem posts. You have an active warranty claim that must be resolved first.", "error");
+      setActiveSubTab('history');
       return;
     }
     if (hasActiveJob) {
@@ -608,9 +748,31 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                 )
               )}
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.3rem 0 0 0' }}>
-              Specialization: <strong style={{ color: 'var(--text-heading)' }}>{verifForm.skills || 'AC Repair, Electrical, Plumbing'}</strong> • <strong>{verifForm.experienceYears || 3}+ Years Exp</strong>
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                Specialization: <strong style={{ color: 'var(--text-heading)' }}>{verifForm.skills || 'AC Repair, Electrical, Plumbing'}</strong> • <strong>{verifForm.experienceYears || 3}+ Yrs Exp</strong>
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowLocationPickerModal(true)}
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.25rem 0.65rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  borderColor: 'rgba(16, 185, 129, 0.3)',
+                  color: '#34d399'
+                }}
+                title="Update your service base location coordinates"
+              >
+                <MapPin size={12} />
+                <span>Base: <strong>{verifForm.serviceArea || 'Dhaka'}</strong></span>
+                <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>(Change)</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -721,6 +883,43 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
         </div>
       )}
 
+      {/* --- URGENT WARRANTY RESTRICTION BANNER --- */}
+      {hasActiveWarrantyClaim && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(245, 158, 11, 0.18))',
+          border: '1.5px solid #ef4444',
+          borderRadius: '16px',
+          padding: '1.2rem 1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          boxShadow: '0 8px 30px rgba(239, 68, 68, 0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '280px' }}>
+            <div style={{ background: '#ef4444', borderRadius: '50%', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 15px rgba(239, 68, 68, 0.5)' }}>
+              <ShieldAlert size={26} color="#fff" />
+            </div>
+            <div>
+              <h4 style={{ margin: 0, color: '#fca5a5', fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                🚨 Warranty Action Required ({activeWarrantyBookings.length} Active Claim)
+              </h4>
+              <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                A customer reported a recurring issue under 30-day warranty. You are restricted from accepting new jobs until this free warranty service is finished.
+              </p>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ background: '#ef4444', color: '#fff', border: 'none', fontWeight: 'bold', padding: '0.55rem 1.2rem', fontSize: '0.85rem' }}
+            onClick={() => setActiveSubTab('history')}
+          >
+            Go to Warranty Claims ({activeWarrantyBookings.length}) →
+          </button>
+        </div>
+      )}
+
       {/* --- SUBTABS NAVIGATION --- */}
       <div style={{
         display: 'grid',
@@ -763,9 +962,9 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
         <button
           onClick={() => setActiveSubTab('history')}
           className={`btn ${activeSubTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ padding: '0.5rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center', textAlign: 'center', whiteSpace: 'normal', minHeight: '40px' }}
+          style={{ padding: '0.5rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center', textAlign: 'center', whiteSpace: 'normal', minHeight: '40px', position: 'relative' }}
         >
-          📜 History ({completedBookings.length})
+          📜 History ({completedBookings.length}) {hasActiveWarrantyClaim && <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '10px', marginLeft: '4px', fontWeight: 'bold' }}>⚠️ Claim</span>}
         </button>
         <button
           onClick={() => setActiveSubTab('verification')}
@@ -1345,47 +1544,117 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
       {/* ============================================================ */}
       {activeSubTab === 'history' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-          <h3 style={{ fontSize: '1.2rem', color: 'var(--text-heading)', margin: 0 }}>Completed Service History & Customer Ratings</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)', margin: 0 }}>Completed Service History & Warranty Claims</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.3rem 0 0 0' }}>
+                Review past jobs, ratings, and active 30-day warranty service claims assigned to you.
+              </p>
+            </div>
+            {hasActiveWarrantyClaim && (
+              <span className="badge badge-warning" style={{ border: '1.5px solid #ef4444', color: '#ef4444', background: 'rgba(239, 68, 68, 0.15)', padding: '0.45rem 0.9rem', fontWeight: 'bold' }}>
+                ⚠️ {activeWarrantyBookings.length} Unresolved Warranty Claim Active
+              </span>
+            )}
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-            {completedBookings.map((b) => (
-              <div
-                key={b.id}
-                className="glass-card"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: 'rgba(255,255,255,0.02)',
-                  padding: '1.2rem',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border-color)',
-                  flexWrap: 'wrap',
-                  gap: '1rem'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
-                    <strong style={{ fontSize: '1rem', color: 'var(--text-heading)' }}>{b.serviceType}</strong>
-                    <span className="badge badge-verified">Completed</span>
-                    {b.paymentStatus === 'PAID' && <span className="badge badge-gold">Paid ({b.paymentMethod || 'bKash'})</span>}
-                  </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.3rem', marginBottom: 0 }}>
-                    Customer: <strong>{b.customer?.name}</strong> • Final Price: <strong>৳{b.agreedCost || b.estimatedCost}</strong> • 
-                    Net Earning: <strong style={{ color: 'var(--primary)' }}>৳{b.workerNetEarning || (b.agreedCost ? Math.round(b.agreedCost * 0.95) : 0)}</strong>
-                  </p>
-                  {b.reviewRating && (
-                    <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--accent-gold)' }}>
-                      ⭐ {b.reviewRating}/5: <em>"{b.reviewComment || 'Great service!'}"</em>
-                    </div>
-                  )}
-                </div>
+            {completedBookings.map((b) => {
+              const completedDate = new Date(b.completedAt || b.paidAt || b.createdAt);
+              const formattedWorkedDate = isNaN(completedDate.getTime()) ? 'Recently' : completedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              const isWarrantyClaimed = b.warrantyStatus === 'WARRANTY_CLAIMED';
+              const isWarrantyAccepted = b.warrantyStatus === 'WARRANTY_ACCEPTED';
+              const isWarrantyCompleted = b.warrantyStatus === 'WARRANTY_COMPLETED';
 
-                <button className="btn btn-secondary" style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }} onClick={() => handleOpenDetails(b)}>
-                  <Eye size={14} /> Full Record
-                </button>
-              </div>
-            ))}
+              return (
+                <div
+                  key={b.id}
+                  className="glass-card"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: isWarrantyClaimed ? 'rgba(239, 68, 68, 0.08)' : isWarrantyAccepted ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255,255,255,0.02)',
+                    padding: '1.3rem',
+                    borderRadius: '14px',
+                    border: isWarrantyClaimed ? '1.5px solid #ef4444' : isWarrantyAccepted ? '1.5px solid #f59e0b' : '1px solid var(--border-color)',
+                    flexWrap: 'wrap',
+                    gap: '1rem',
+                    boxShadow: (isWarrantyClaimed || isWarrantyAccepted) ? '0 4px 20px rgba(0,0,0,0.3)' : 'none'
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: '280px' }}>
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+                      <strong style={{ fontSize: '1rem', color: 'var(--text-heading)' }}>{b.serviceType}</strong>
+                      <span className="badge badge-verified">Completed</span>
+                      {b.paymentStatus === 'PAID' && <span className="badge badge-gold">Paid ({b.paymentMethod || 'bKash'})</span>}
+                      
+                      {/* Warranty Status Badges for Worker */}
+                      {isWarrantyClaimed ? (
+                        <span className="badge badge-warning" style={{ background: '#ef4444', color: '#fff', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <ShieldAlert size={13} /> 🚨 Warranty Action Required
+                        </span>
+                      ) : isWarrantyAccepted ? (
+                        <span className="badge badge-gold" style={{ background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#f59e0b' }}>
+                          <Clock size={12} /> 🛠️ Free Warranty In Progress
+                        </span>
+                      ) : isWarrantyCompleted ? (
+                        <span className="badge badge-verified" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid #10b981' }}>
+                          <CheckCircle2 size={12} /> Warranty Service Finished
+                        </span>
+                      ) : (
+                        <span className="badge badge-verified" style={{ opacity: 0.8 }}>
+                          <ShieldCheck size={12} /> 30-Day Guarantee
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.3rem', marginBottom: 0 }}>
+                      Customer: <strong>{b.customer?.name}</strong> • Phone: <strong>{b.customer?.phone || '01711223344'}</strong> • Address: <strong>{b.address || b.customer?.address || 'Client Address'}</strong>
+                    </p>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem', marginBottom: 0 }}>
+                      Worked Date: <strong>{formattedWorkedDate}</strong> • Final Price: <strong>৳{b.agreedCost || b.estimatedCost}</strong> • Net Earning: <strong style={{ color: 'var(--primary)' }}>৳{b.workerNetEarning || (b.agreedCost ? Math.round(b.agreedCost * 0.95) : 0)}</strong>
+                    </p>
+
+                    {/* Warranty issue prompt */}
+                    {b.warrantyProblemDescription && (
+                      <div style={{ marginTop: '0.6rem', padding: '0.5rem 0.8rem', background: isWarrantyClaimed ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.1)', borderRadius: '8px', borderLeft: isWarrantyClaimed ? '3px solid #ef4444' : '3px solid #f59e0b', fontSize: '0.82rem', color: isWarrantyClaimed ? '#fca5a5' : '#f59e0b' }}>
+                        <strong>⚠️ Customer Reported Warranty Issue:</strong> "{b.warrantyProblemDescription}"
+                        {b.warrantyClaimedAt && <span style={{ display: 'block', fontSize: '0.75rem', marginTop: '0.2rem', opacity: 0.8 }}>Claimed on: {new Date(b.warrantyClaimedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
+                    )}
+
+                    {isWarrantyAccepted && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Clock size={14} /> Please visit customer at their location to perform free repair. Customer will mark "Done" upon completion to lift worker restrictions.
+                      </div>
+                    )}
+
+                    {b.reviewRating && (
+                      <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--accent-gold)' }}>
+                        ⭐ {b.reviewRating}/5: <em>"{b.reviewComment || 'Great service!'}"</em>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {isWarrantyClaimed && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: '#fff', fontWeight: 'bold', padding: '0.5rem 1.1rem', fontSize: '0.85rem', boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                        onClick={() => handleAcceptWarranty(b.id)}
+                      >
+                        <Check size={16} /> Accept Warranty Claim
+                      </button>
+                    )}
+
+                    <button className="btn btn-secondary" style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }} onClick={() => handleOpenDetails(b)}>
+                      <Eye size={14} /> Full Record
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
 
             {completedBookings.length === 0 && (
               <div className="glass-card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
@@ -2445,6 +2714,107 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                   />
                 </div>
 
+                {/* --- SERVICE LOCATION (FOR CUSTOMER MATCHING & DISPATCH) --- */}
+                <div style={{
+                  background: 'rgba(16, 185, 129, 0.05)',
+                  padding: '1.2rem',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.9rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Compass size={18} color="#10b981" />
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-heading)' }}>
+                          Public Service Location (Customer Discovery Base) *
+                        </h4>
+                      </div>
+                      <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        Customers within your service radius will match and book you based on this point. (No manual typing)
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={handleUseCurrentLocationForVerif}
+                        disabled={isDetectingGps}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.45rem 0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          borderColor: 'rgba(16, 185, 129, 0.3)',
+                          color: '#34d399'
+                        }}
+                      >
+                        <Navigation size={13} className={isDetectingGps ? 'animate-spin' : ''} />
+                        {isDetectingGps ? 'Detecting GPS...' : 'Use My Current Location'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setShowLocationPickerModal(true)}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '0.45rem 0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'linear-gradient(90deg, #10b981, #059669)'
+                        }}
+                      >
+                        <MapPin size={13} />
+                        Select Location on Map
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Read-only Location Coordinates & Area Display */}
+                  <div style={{
+                    background: 'rgba(5, 10, 20, 0.6)',
+                    padding: '0.8rem 1rem',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border-color)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.6rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <MapPin size={16} color="#10b981" />
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-heading)' }}>
+                          {verifForm.serviceArea || 'Sector 11, Uttara, Dhaka'}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          Service Area Name (Displayed to nearby customers)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                        Lat: {Number(verifForm.latitude || 23.8720).toFixed(5)}
+                      </span>
+                      <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                        Lon: {Number(verifForm.longitude || 90.3810).toFixed(5)}
+                      </span>
+                      <span className="badge badge-verified" style={{ fontSize: '0.7rem' }}>
+                        ✔ Pin Active
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setVerifStep(1)}>← Back</button>
                   <button type="button" className="btn btn-primary" onClick={() => setVerifStep(3)}>Next: Professional Experience →</button>
@@ -2679,9 +3049,17 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                   </div>
 
                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>PRESENT ADDRESS</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>PRESENT ADDRESS (PRIVATE)</span>
                     <strong style={{ color: 'var(--text-heading)' }}>{verifForm.presentAddress}</strong>
                     <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.2rem' }}>{verifForm.cityArea}, {verifForm.division}</div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>PUBLIC SERVICE BASE</span>
+                    <strong style={{ color: '#10b981' }}>{verifForm.serviceArea}</strong>
+                    <div style={{ color: '#38bdf8', fontSize: '0.78rem', marginTop: '0.2rem', fontFamily: 'monospace' }}>
+                      ({Number(verifForm.latitude || 23.8720).toFixed(4)}, {Number(verifForm.longitude || 90.3810).toFixed(4)})
+                    </div>
                   </div>
 
                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -2712,6 +3090,23 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
           </div>
         </div>
       )}
+
+      {/* --- REUSABLE LOCATION PICKER MODAL --- */}
+      <LocationPickerModal
+        isOpen={showLocationPickerModal}
+        onClose={() => setShowLocationPickerModal(false)}
+        initialLat={verifForm.latitude || 23.8720}
+        initialLon={verifForm.longitude || 90.3810}
+        initialAddress={verifForm.serviceArea || verifForm.presentAddress}
+        title="Set Technician Service Location"
+        description="Pin the central base where you provide services. Nearby customers within your radius will match with you."
+        onConfirm={(loc) => {
+          handleConfirmLocationPicker(loc);
+          if (isWorkerApproved) {
+            handleQuickUpdateLocation(loc);
+          }
+        }}
+      />
 
     </div>
   );

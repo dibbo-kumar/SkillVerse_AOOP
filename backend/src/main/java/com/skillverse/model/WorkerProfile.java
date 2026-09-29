@@ -1,41 +1,58 @@
 package com.skillverse.model;
 
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "worker_profiles")
 public class WorkerProfile {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long userId;
-    private String skills; // e.g. "Plumbing, Electrical"
+
+    @OneToOne
+    @JoinColumn(name = "user_id", referencedColumnName = "id")
+    private User user;
+
+    private String skills; // comma separated e.g. "Plumbing, Electrical"
     private Integer experienceYears;
     private String serviceArea;
     private String careerLevel; // Beginner, Bronze, Silver, Gold, Platinum, Master
     private Double hourlyRate;
-    private Double basePrice;
+    private Double basePrice = 300.0;
     private boolean isAvailable;
     private Double latitude;
     private Double longitude;
 
-    public WorkerProfile() {
-        this.basePrice = 300.0;
-        this.isAvailable = true;
-        this.careerLevel = "Bronze";
-    }
+    public WorkerProfile() {}
 
-    public WorkerProfile(Long id, Long userId, String skills, Integer experienceYears, String serviceArea, String careerLevel, Double hourlyRate) {
-        this();
-        this.id = id;
-        this.userId = userId;
+    public WorkerProfile(User user, String skills, Integer experienceYears, String serviceArea, String careerLevel, Double hourlyRate) {
+        this.user = user;
         this.skills = skills;
         this.experienceYears = experienceYears;
         this.serviceArea = serviceArea;
         this.careerLevel = careerLevel;
         this.hourlyRate = hourlyRate;
+        this.basePrice = 300.0;
+        this.isAvailable = true;
+    }
+
+    public WorkerProfile(User user, String skills, Integer experienceYears, String serviceArea, String careerLevel, Double hourlyRate, Double basePrice) {
+        this.user = user;
+        this.skills = skills;
+        this.experienceYears = experienceYears;
+        this.serviceArea = serviceArea;
+        this.careerLevel = careerLevel;
+        this.hourlyRate = hourlyRate;
+        this.basePrice = basePrice != null ? basePrice : 300.0;
+        this.isAvailable = true;
     }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
     public String getSkills() { return skills; }
     public void setSkills(String skills) { this.skills = skills; }
@@ -52,7 +69,7 @@ public class WorkerProfile {
     public Double getHourlyRate() { return hourlyRate; }
     public void setHourlyRate(Double hourlyRate) { this.hourlyRate = hourlyRate; }
 
-    public Double getBasePrice() { return basePrice; }
+    public Double getBasePrice() { return basePrice != null ? basePrice : 300.0; }
     public void setBasePrice(Double basePrice) { this.basePrice = basePrice; }
 
     public boolean isAvailable() { return isAvailable; }
