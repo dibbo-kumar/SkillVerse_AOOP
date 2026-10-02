@@ -1,6 +1,6 @@
 # 🔐 SkillVerse Demo Accounts & Test Credentials
 
-Use these pre-configured user credentials to log in and test different user roles, capabilities, workflows, and portals across the **SkillVerse** platform.
+Use these pre-configured user credentials to log in and test different user roles, capabilities, workflows, and portals across the **SkillVerse** platforms.
 
 ---
 
