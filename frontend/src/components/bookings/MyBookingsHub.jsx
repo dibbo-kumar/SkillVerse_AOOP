@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import safeStorage from '../../utils/safeStorage';
 import {
   Calendar, Clock, MapPin, CheckCircle2, ShieldCheck, AlertCircle,
   TrendingUp, Award, User, Phone, Wrench, Search, Filter, ArrowRight,
@@ -156,9 +157,9 @@ export default function MyBookingsHub({ currentUser, rewards, initialTab = 'over
     }
     const userKey = currentUser ? `skillverse_saved_workers_${currentUser.id || currentUser.email}` : 'skillverse_saved_workers_guest';
     try {
-      const uSaved = JSON.parse(localStorage.getItem(userKey) || '[]');
+      const uSaved = JSON.parse(safeStorage.getItem(userKey) || '[]');
       const updatedUserSaved = (uSaved || []).map(Number).filter(id => id !== numericId);
-      localStorage.setItem(userKey, JSON.stringify(updatedUserSaved));
+      safeStorage.setItem(userKey, JSON.stringify(updatedUserSaved));
     } catch (e) { }
 
     if (onShowToast) {

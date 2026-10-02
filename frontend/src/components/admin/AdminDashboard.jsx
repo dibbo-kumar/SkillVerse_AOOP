@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import safeStorage from '../../utils/safeStorage';
 import {
   LayoutDashboard, Users, ShieldCheck, Calendar, DollarSign,
   GraduationCap, Wrench, BarChart3, Bell, Settings, Search,
@@ -16,15 +17,15 @@ const API_BASE = "http://localhost:8081/api";
 
 export default function AdminDashboard({ currentUser, onShowToast }) {
   const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('skillverse_admin_active_tab') || 'overview';
+    return safeStorage.getItem('skillverse_admin_active_tab') || 'overview';
   });
   const [loading, setLoading] = useState(true);
   const mainContentRef = React.useRef(null);
 
-  // Sync activeTab to localStorage and scroll to top
+  // Sync activeTab to safeStorage and scroll to top
   useEffect(() => {
     if (activeTab) {
-      localStorage.setItem('skillverse_admin_active_tab', activeTab);
+      safeStorage.setItem('skillverse_admin_active_tab', activeTab);
     }
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import safeStorage from '../../utils/safeStorage';
 import { 
   ShoppingBag, Search, Filter, Heart, Star, CheckCircle, ShieldCheck, 
   Truck, ArrowRight, XCircle, Plus, Minus, CreditCard, ChevronRight, 
@@ -52,13 +53,13 @@ function ToolStoreContent({ currentUser, rewards, onUsePoints, onShowToast, cont
     }
   });
 
-  // Save cart & wishlist to localStorage
+  // Save cart & wishlist to safeStorage
   useEffect(() => {
-    localStorage.setItem('skillverse_store_cart', JSON.stringify(cart));
+    safeStorage.setItem('skillverse_store_cart', JSON.stringify(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('skillverse_store_wishlist', JSON.stringify(wishlist));
+    safeStorage.setItem('skillverse_store_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   // Modals & Selected Views State

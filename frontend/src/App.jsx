@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import safeStorage from './utils/safeStorage';
 import {
   ShieldCheck,
   MapPin,
@@ -530,24 +531,24 @@ const INITIAL_WORKERS = [
 ];
 
 function App() {
-  // Theme state: defaults to 'light' (Primary Theme), persists in localStorage
+  // Theme state: defaults to 'light' (Primary Theme), persists in safeStorage
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('skillverse_theme') || 'light';
+    return safeStorage.getItem('skillverse_theme') || 'light';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('skillverse_theme', theme);
+    safeStorage.setItem('skillverse_theme', theme);
   }, [theme]);
 
-  // Logged in user state persisted in localStorage
+  // Logged in user state persisted in safeStorage
   const [currentUser, setCurrentUser] = useState(() => {
-    const savedUser = localStorage.getItem('fixconnect_user');
+    const savedUser = safeStorage.getItem('fixconnect_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return !!localStorage.getItem('fixconnect_user');
+    return !!safeStorage.getItem('fixconnect_user');
   });
 
   const [authMode, setAuthMode] = useState('login'); // login, signup
@@ -585,7 +586,7 @@ function App() {
         verified: true,
         profilePicture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
       };
-      localStorage.setItem('skillverse_admin_active_tab', 'overview');
+      safeStorage.setItem('skillverse_admin_active_tab', 'overview');
       setCurrentUser(adminUser);
       setIsLoggedIn(true);
       setActiveTab('admin');
@@ -681,7 +682,7 @@ function App() {
     const isDemoAnis = currentUser.email === 'anis@gmail.com';
 
     // Notifications
-    const savedNotifs = localStorage.getItem(getUserKey('notifications', currentUser));
+    const savedNotifs = safeStorage.getItem(getUserKey('notifications', currentUser));
     if (savedNotifs) {
       try { setNotifications(JSON.parse(savedNotifs)); } catch (e) { setNotifications([]); }
     } else {
@@ -693,7 +694,7 @@ function App() {
     }
 
     // Saved Workers
-    const savedW = localStorage.getItem(getUserKey('saved_workers', currentUser));
+    const savedW = safeStorage.getItem(getUserKey('saved_workers', currentUser));
     if (savedW) {
       try { setSavedWorkerIds(JSON.parse(savedW)); } catch (e) { setSavedWorkerIds([]); }
     } else {
@@ -701,7 +702,7 @@ function App() {
     }
 
     // Properties
-    const savedProps = localStorage.getItem(getUserKey('properties', currentUser));
+    const savedProps = safeStorage.getItem(getUserKey('properties', currentUser));
     if (savedProps) {
       try { setProperties(JSON.parse(savedProps)); } catch (e) { setProperties([]); }
     } else {
@@ -709,7 +710,7 @@ function App() {
     }
 
     // Addresses
-    const savedAddr = localStorage.getItem(getUserKey('addresses', currentUser));
+    const savedAddr = safeStorage.getItem(getUserKey('addresses', currentUser));
     if (savedAddr) {
       try { setAddresses(JSON.parse(savedAddr)); } catch (e) { setAddresses([]); }
     } else {
@@ -717,7 +718,7 @@ function App() {
     }
 
     // Service History
-    const savedHist = localStorage.getItem(getUserKey('service_history', currentUser));
+    const savedHist = safeStorage.getItem(getUserKey('service_history', currentUser));
     if (savedHist) {
       try { setServiceHistory(JSON.parse(savedHist)); } catch (e) { setServiceHistory([]); }
     } else {
@@ -725,7 +726,7 @@ function App() {
     }
 
     // Transactions
-    const savedTx = localStorage.getItem(getUserKey('transactions', currentUser));
+    const savedTx = safeStorage.getItem(getUserKey('transactions', currentUser));
     if (savedTx) {
       try { setTransactions(JSON.parse(savedTx)); } catch (e) { setTransactions([]); }
     } else {
@@ -733,7 +734,7 @@ function App() {
     }
 
     // Reviews
-    const savedRev = localStorage.getItem(getUserKey('reviews', currentUser));
+    const savedRev = safeStorage.getItem(getUserKey('reviews', currentUser));
     if (savedRev) {
       try { setReviews(JSON.parse(savedRev)); } catch (e) { setReviews([]); }
     } else {
@@ -741,7 +742,7 @@ function App() {
     }
 
     // Rewards
-    const savedRew = localStorage.getItem(getUserKey('rewards', currentUser));
+    const savedRew = safeStorage.getItem(getUserKey('rewards', currentUser));
     if (savedRew) {
       try { setRewards(JSON.parse(savedRew)); } catch (e) { setRewards({ points: 100, tier: 'Welcome Member', referralCode: 'SKILL-' + (currentUser.id || '1') }); }
     } else {
@@ -749,64 +750,64 @@ function App() {
     }
   }, [currentUser?.id, currentUser?.email]);
 
-  // Sync to user-specific localStorage
+  // Sync to user-specific storage safely
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('notifications', currentUser), JSON.stringify(notifications));
+      safeStorage.setItem(getUserKey('notifications', currentUser), JSON.stringify(notifications));
     }
   }, [notifications, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('saved_workers', currentUser), JSON.stringify(savedWorkerIds));
+      safeStorage.setItem(getUserKey('saved_workers', currentUser), JSON.stringify(savedWorkerIds));
     }
   }, [savedWorkerIds, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('properties', currentUser), JSON.stringify(properties));
+      safeStorage.setItem(getUserKey('properties', currentUser), JSON.stringify(properties));
     }
   }, [properties, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('addresses', currentUser), JSON.stringify(addresses));
+      safeStorage.setItem(getUserKey('addresses', currentUser), JSON.stringify(addresses));
     }
   }, [addresses, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('service_history', currentUser), JSON.stringify(serviceHistory));
+      safeStorage.setItem(getUserKey('service_history', currentUser), JSON.stringify(serviceHistory));
     }
   }, [serviceHistory, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('transactions', currentUser), JSON.stringify(transactions));
+      safeStorage.setItem(getUserKey('transactions', currentUser), JSON.stringify(transactions));
     }
   }, [transactions, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('reviews', currentUser), JSON.stringify(reviews));
+      safeStorage.setItem(getUserKey('reviews', currentUser), JSON.stringify(reviews));
     }
   }, [reviews, currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(getUserKey('rewards', currentUser), JSON.stringify(rewards));
+      safeStorage.setItem(getUserKey('rewards', currentUser), JSON.stringify(rewards));
     }
   }, [rewards, currentUser?.id, currentUser?.email]);
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('fixconnect_user', JSON.stringify(currentUser));
+      safeStorage.setItem('fixconnect_user', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('fixconnect_user');
+      safeStorage.removeItem('fixconnect_user');
     }
   }, [currentUser]);
   useEffect(() => {
     if (activeTab) {
-      localStorage.setItem('fixconnect_active_tab', activeTab);
+      safeStorage.setItem('fixconnect_active_tab', activeTab);
     }
   }, [activeTab]);
 
@@ -846,7 +847,7 @@ function App() {
   // Persist chat messages to current user's local key
   useEffect(() => {
     const key = getChatKey(currentUser);
-    localStorage.setItem(key, JSON.stringify(chatMessages));
+    safeStorage.setItem(key, JSON.stringify(chatMessages));
   }, [chatMessages, currentUser?.id, currentUser?.email]);
 
   // Booking modal states
@@ -1508,7 +1509,7 @@ function App() {
         alert("🎉 NID Verification Application & Document photos submitted successfully!\n\nSystem Admin will review and verify your identity in the Admin Command Center.");
         const updated = { ...currentUser, verified: false, nidNumber: nidNumber };
         setCurrentUser(updated);
-        localStorage.setItem('fixconnect_user', JSON.stringify(updated));
+        safeStorage.setItem('fixconnect_user', JSON.stringify(updated));
         fetchAdminData();
       } else {
         await fetch(`${API_BASE}/workers/${currentUser.id}/verify?nid=${nidNumber}`, { method: 'POST' });
@@ -1695,9 +1696,9 @@ function App() {
       }
       try {
         if (currentUser) {
-          localStorage.setItem(getUserKey('saved_workers', currentUser), JSON.stringify(updated));
+          safeStorage.setItem(getUserKey('saved_workers', currentUser), JSON.stringify(updated));
         }
-        localStorage.removeItem('skillverse_saved_technicians');
+        safeStorage.removeItem('skillverse_saved_technicians');
       } catch (e) {}
       return updated;
     });
@@ -2172,7 +2173,7 @@ function App() {
             navigate('/worker');
           } else {
             setActiveTab('admin');
-            localStorage.setItem('skillverse_admin_active_tab', 'overview');
+            safeStorage.setItem('skillverse_admin_active_tab', 'overview');
             navigate('/admin');
           }
           window.scrollTo({ top: 0, behavior: 'smooth' });
