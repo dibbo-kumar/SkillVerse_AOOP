@@ -32,7 +32,7 @@ public class BookingController {
         try {
             ServiceBooking saved = bookingService.save(request);
             return ResponseEntity.ok(saved);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

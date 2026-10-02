@@ -19,13 +19,16 @@ public class TrainingService {
     private final CourseRepository courseRepository;
     private final CourseLessonRepository lessonRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
+    private final com.skillverse.repository.UserRepository userRepository;
 
     public TrainingService(CourseRepository courseRepository,
                            CourseLessonRepository lessonRepository,
-                           CourseEnrollmentRepository enrollmentRepository) {
+                           CourseEnrollmentRepository enrollmentRepository,
+                           com.skillverse.repository.UserRepository userRepository) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.userRepository = userRepository;
     }
 
     public List<Course> getAllCourses() {
@@ -126,6 +129,13 @@ public class TrainingService {
     }
 
     public CourseEnrollment enrollCourse(Long userId, Long courseId, String method, String status, String txId, Double price) {
+        if (userId != null) {
+            userRepository.findById(userId).ifPresent(u -> {
+                if ("SUSPENDED".equalsIgnoreCase(u.getStatus())) {
+                    throw new IllegalStateException("Your account has been suspended by Administrator. You cannot enroll in courses while suspended.");
+                }
+            });
+        }
         Optional<CourseEnrollment> existing = enrollmentRepository.findByUserIdAndCourseId(userId, courseId);
         CourseEnrollment enrollment;
         if (existing.isPresent()) {

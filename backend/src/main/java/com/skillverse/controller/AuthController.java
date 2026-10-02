@@ -90,4 +90,25 @@ public class AuthController {
         }
         return ResponseEntity.notFound().build();
     }
+
+    /**
+     * User Account Reopen / Appeal Request
+     */
+    @PostMapping("/appeal")
+    public ResponseEntity<?> submitAppeal(@RequestBody com.skillverse.dto.ReopenAppealRequest appealRequest) {
+        if (appealRequest.getUserId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "User ID is required for account appeal."));
+        }
+        return authService.requestAccountReopen(appealRequest.getUserId(), appealRequest.getReason())
+                .map(user -> ResponseEntity.ok(Map.of("message", "Account reopening appeal submitted successfully.", "user", user)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/users/{id}/reopen-request")
+    public ResponseEntity<?> requestReopen(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+        String reason = body != null ? body.get("reason") : "Account reinstatement requested by user.";
+        return authService.requestAccountReopen(id, reason)
+                .map(user -> ResponseEntity.ok(Map.of("message", "Account reopening appeal submitted successfully.", "user", user)))
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

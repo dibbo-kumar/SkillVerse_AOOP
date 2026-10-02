@@ -34,7 +34,7 @@ public class ProblemPostController {
         try {
             ProblemPost saved = problemPostService.saveFromMap(req);
             return ResponseEntity.ok(saved);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

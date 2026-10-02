@@ -164,6 +164,11 @@ public class AdminService {
             map.put("address", u.getAddress());
             map.put("profilePicture", u.getProfilePicture());
             map.put("createdAt", u.getCreatedAt());
+            map.put("suspensionReason", u.getSuspensionReason());
+            map.put("suspendedAt", u.getSuspendedAt());
+            map.put("reopenRequested", u.isReopenRequested());
+            map.put("reopenReason", u.getReopenReason());
+            map.put("reopenRequestedAt", u.getReopenRequestedAt());
 
             if ("WORKER".equalsIgnoreCase(u.getRole())) {
                 long totalJobs = bookings.stream().filter(b -> b.getWorker() != null && b.getWorker().getId().equals(u.getId())).count();
@@ -189,7 +194,22 @@ public class AdminService {
 
     public Optional<User> updateUserStatus(Long id, String status) {
         return userRepository.findById(id).map(user -> {
-            user.setStatus(status.toUpperCase());
+            String upperStatus = status.toUpperCase();
+            user.setStatus(upperStatus);
+
+            if ("SUSPENDED".equalsIgnoreCase(upperStatus)) {
+                user.setSuspendedAt(LocalDateTime.now());
+                if (user.getSuspensionReason() == null) {
+                    user.setSuspensionReason("Account suspended by System Administrator.");
+                }
+            } else if ("ACTIVE".equalsIgnoreCase(upperStatus)) {
+                user.setSuspendedAt(null);
+                user.setSuspensionReason(null);
+                user.setReopenRequested(false);
+                user.setReopenReason(null);
+                user.setReopenRequestedAt(null);
+            }
+
             userRepository.save(user);
 
             auditLogRepository.save(new AuditLog(
@@ -198,11 +218,17 @@ public class AdminService {
                     "ADMIN",
                     "User",
                     user.getId(),
-                    "User " + user.getName() + " (" + user.getRole() + ") status updated to " + status.toUpperCase()
+                    "User " + user.getName() + " (" + user.getRole() + ") status updated to " + upperStatus
             ));
 
             return user;
         });
+    }
+
+    public List<User> getReopenRequests() {
+        return userRepository.findAll().stream()
+                .filter(u -> u.isReopenRequested() || "SUSPENDED".equalsIgnoreCase(u.getStatus()))
+                .collect(Collectors.toList());
     }
 
     public List<VerificationRequest> getVerificationRequests(String status) {

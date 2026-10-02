@@ -58,6 +58,41 @@ public class FullPlatformE2ETest {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        // Ensure test workers and customer are active and have no blocking active jobs or warranty claims
+        List<ServiceBooking> allBookings = bookingRepository.findAll();
+        for (ServiceBooking b : allBookings) {
+            if (b.getWorker() != null && ("kamrul@gmail.com".equals(b.getWorker().getEmail()) || "rafiq@gmail.com".equals(b.getWorker().getEmail()))) {
+                b.setStatus("COMPLETED");
+                b.setWarrantyStatus("NONE");
+                b.setAdvancePaid(true);
+                bookingRepository.save(b);
+            }
+        }
+        userRepository.findByEmail("kamrul@gmail.com").ifPresent(u -> {
+            u.setStatus("ACTIVE");
+            u.setVerified(true);
+            u.setReopenRequested(false);
+            u.setReopenReason(null);
+            userRepository.save(u);
+        });
+        userRepository.findByEmail("rafiq@gmail.com").ifPresent(u -> {
+            u.setStatus("ACTIVE");
+            u.setVerified(true);
+            u.setReopenRequested(false);
+            u.setReopenReason(null);
+            userRepository.save(u);
+        });
+        userRepository.findByEmail("anis@gmail.com").ifPresent(u -> {
+            u.setStatus("ACTIVE");
+            u.setVerified(true);
+            u.setReopenRequested(false);
+            u.setReopenReason(null);
+            userRepository.save(u);
+        });
+    }
+
     @Test
     @DisplayName("CUSTOMER WORKFLOW: Search, Book, Advance Pay, Start OTP, Complete Pay, Review, Warranty Claim")
     void testCustomerEndToEndLifecycle() throws Exception {
@@ -395,5 +430,62 @@ public class FullPlatformE2ETest {
         mockMvc.perform(put("/api/admin/settings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"platform_commission\":\"5\"}"));
+    }
+
+    @Test
+    @DisplayName("SUSPENSION & APPEAL WORKFLOW: Admin Suspends -> Actions Blocked -> User Submits Appeal -> Admin Unsuspends")
+    void testAccountSuspensionAppealAndReactivationFlow() throws Exception {
+        User customer = userRepository.findByEmail("anis@gmail.com").orElseThrow();
+        User worker = userRepository.findByEmail("kamrul@gmail.com").orElseThrow();
+
+        // 1. Admin suspends customer account
+        mockMvc.perform(put("/api/admin/users/" + customer.getId() + "/status")
+                        .param("status", "SUSPENDED")
+                        .param("reason", "Suspicious booking activities detected."))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.status").value("SUSPENDED"));
+
+        // 2. Suspended customer attempts to create a booking -> MUST be blocked
+        BookingRequest bookingReq = new BookingRequest();
+        bookingReq.setCustomerId(customer.getId());
+        bookingReq.setWorkerId(worker.getId());
+        bookingReq.setServiceType("Electrical");
+        bookingReq.setEstimatedCost(1200.0);
+        bookingReq.setDescription("Emergency wiring repair");
+        bookingReq.setAddress("Uttara Sector 12");
+
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(bookingReq)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("suspended")));
+
+        // 3. Customer submits an Appeal to reopen their account
+        String appealPayload = "{\"userId\":" + customer.getId() + ",\"reason\":\"I apologize for any misunderstanding. All my requests are genuine and verified.\"}";
+        mockMvc.perform(post("/api/auth/appeal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(appealPayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.reopenRequested").value(true))
+                .andExpect(jsonPath("$.user.reopenReason").value(org.hamcrest.Matchers.containsString("genuine and verified")));
+
+        // 4. Admin checks the Reopen Appeals list -> Customer appeal appears
+        mockMvc.perform(get("/api/admin/users/reopen-requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[?(@.id == " + customer.getId() + ")]").exists());
+
+        // 5. Admin reviews appeal and Unsuspends customer
+        mockMvc.perform(put("/api/admin/users/" + customer.getId() + "/unsuspend"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.user.reopenRequested").value(false));
+
+        // 6. Restored customer can now successfully create bookings
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(bookingReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
     }
 }

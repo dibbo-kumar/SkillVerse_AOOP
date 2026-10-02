@@ -47,6 +47,9 @@ public class ProblemPostService {
         if (customer == null) {
             throw new IllegalArgumentException("Customer not found: " + req.getCustomerId());
         }
+        if ("SUSPENDED".equalsIgnoreCase(customer.getStatus())) {
+            throw new IllegalStateException("Your account has been suspended by Administrator. You cannot post problems while suspended.");
+        }
 
         ProblemPost post = new ProblemPost();
         post.setCustomer(customer);
@@ -69,6 +72,9 @@ public class ProblemPostService {
         User customer = userRepository.findById(customerId).orElse(null);
         if (customer == null) {
             throw new IllegalArgumentException("Customer not found: " + customerId);
+        }
+        if ("SUSPENDED".equalsIgnoreCase(customer.getStatus())) {
+            throw new IllegalStateException("Your account has been suspended by Administrator. You cannot post problems while suspended.");
         }
 
         ProblemPost post = new ProblemPost();
@@ -133,7 +139,7 @@ public class ProblemPostService {
         if (!isVerifiedWorker) {
             throw new IllegalStateException("Worker is unverified or under review. Admin verification is required to submit quotes on problem posts.");
         }
-        if (!"ACTIVE".equalsIgnoreCase(worker.getStatus())) {
+        if ("UNVERIFIED".equalsIgnoreCase(worker.getStatus()) || "UNDER_REVIEW".equalsIgnoreCase(worker.getStatus())) {
             worker.setStatus("ACTIVE");
             userRepository.save(worker);
         }

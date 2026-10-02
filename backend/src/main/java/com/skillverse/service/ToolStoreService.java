@@ -141,6 +141,10 @@ public class ToolStoreService {
         User user = userRepository.findById(dto.userId)
                 .orElseThrow(() -> new NoSuchElementException("User not found: " + dto.userId));
 
+        if ("SUSPENDED".equalsIgnoreCase(user.getStatus())) {
+            throw new IllegalStateException("Your account has been suspended by Administrator. You cannot place orders while suspended.");
+        }
+
         ServiceBooking booking = null;
         if (dto.serviceBookingId != null) {
             booking = bookingRepository.findById(dto.serviceBookingId).orElse(null);

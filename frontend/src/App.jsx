@@ -37,7 +37,10 @@ import {
   Sun,
   Moon,
   Palette,
-  Star
+  Star,
+  Send,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import CustomerProfileHub from './components/customer/CustomerProfileHub';
 import CustomerSettings from './components/customer/CustomerSettings';
@@ -908,7 +911,10 @@ function App() {
             prev.phone !== freshUser.phone ||
             prev.name !== freshUser.name ||
             prev.address !== freshUser.address ||
-            prev.status !== freshUser.status
+            prev.status !== freshUser.status ||
+            prev.reopenRequested !== freshUser.reopenRequested ||
+            prev.reopenReason !== freshUser.reopenReason ||
+            prev.suspensionReason !== freshUser.suspensionReason
           ) {
             return { ...prev, ...freshUser };
           }
@@ -918,6 +924,61 @@ function App() {
     } catch (e) {
       // ignore
     }
+  };
+
+  // Appeal state & handlers for suspended users
+  const [appealReasonInput, setAppealReasonInput] = useState('');
+  const [submittingAppeal, setSubmittingAppeal] = useState(false);
+
+  const handleSubmitAppeal = async (e) => {
+    if (e) e.preventDefault();
+    if (!currentUser?.id) return;
+    if (!appealReasonInput.trim()) {
+      showToast("Message Required", "Please provide a reason or explanation for your account reopening appeal.", "error");
+      return;
+    }
+    setSubmittingAppeal(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/appeal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          reason: appealReasonInput.trim()
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updatedUser = data.user || { ...currentUser, reopenRequested: true, reopenReason: appealReasonInput.trim() };
+        setCurrentUser(prev => ({ ...prev, ...updatedUser }));
+        safeStorage.setItem('fixconnect_user', JSON.stringify({ ...currentUser, ...updatedUser }));
+        showToast("Appeal Submitted", "Your account reopening request has been submitted to Admin and is under review.", "success");
+        setAppealReasonInput('');
+      } else {
+        showToast("Submission Failed", "Could not submit appeal at this moment. Please try again.", "error");
+      }
+    } catch (err) {
+      showToast("Submission Failed", "Server communication error. Please try again.", "error");
+    } finally {
+      setSubmittingAppeal(false);
+    }
+  };
+
+  const handleCheckSuspensionStatus = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const res = await fetch(`${API_BASE}/auth/users/${currentUser.id}`);
+      if (res.ok) {
+        const freshUser = await res.json();
+        setCurrentUser(prev => ({ ...prev, ...freshUser }));
+        safeStorage.setItem('fixconnect_user', JSON.stringify(freshUser));
+        if (freshUser.status === 'ACTIVE') {
+          showToast("Account Restored!", "🎉 Great news! Your account has been unsuspended by Admin. You can now use all services.", "success");
+        } else {
+          showToast("Status: Suspended", "Your account is still suspended. If you submitted an appeal, Admin will review it shortly.", "info");
+        }
+      }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -4121,6 +4182,136 @@ function App() {
             >
               OK / Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- SUSPENDED USER INTERCEPTOR MODAL & APPEAL FORM --- */}
+      {isLoggedIn && currentUser && currentUser.role !== 'ADMIN' && currentUser.status === 'SUSPENDED' && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.88)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem'
+        }}>
+          <div className="glass-card" style={{
+            maxWidth: '560px',
+            width: '100%',
+            padding: '2.5rem',
+            background: 'var(--bg-card)',
+            border: '2px solid #ef4444',
+            boxShadow: '0 25px 50px -12px rgba(239, 68, 68, 0.3)',
+            borderRadius: '16px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '2px solid rgba(239, 68, 68, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.2rem',
+              color: '#ef4444'
+            }}>
+              <Lock size={32} />
+            </div>
+
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ef4444', marginBottom: '0.4rem' }}>
+              Account Suspended by Admin
+            </h2>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+              Your account (<strong>{currentUser.email}</strong>) has been suspended by System Administrator. All actions—including booking services, accepting jobs, submitting bids, ordering tools, and cash withdrawals—are restricted until unsuspended.
+            </p>
+
+            {currentUser.suspensionReason && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', color: '#b91c1c', marginBottom: '1.5rem', textAlign: 'left' }}>
+                <strong>Admin Reason:</strong> {currentUser.suspensionReason}
+              </div>
+            )}
+
+            {currentUser.reopenRequested ? (
+              <div style={{
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                padding: '1.2rem',
+                borderRadius: '12px',
+                textAlign: 'left',
+                marginBottom: '1.5rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#b45309', fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                  <Clock size={18} />
+                  <span>Reopening Appeal Under Review</span>
+                </div>
+                <p style={{ fontSize: '0.85rem', color: '#78350f', margin: 0, lineHeight: 1.5 }}>
+                  You submitted an appeal to Admin: <br />
+                  <em style={{ color: '#92400e', fontWeight: 600 }}>"{currentUser.reopenReason || 'Account reinstatement requested by user.'}"</em>
+                </p>
+                <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '0.5rem' }}>
+                  Once Admin reviews and unsuspends your profile in the Admin Command Center, full platform access will be restored automatically.
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitAppeal} style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-heading)', marginBottom: '0.4rem' }}>
+                  Apply for Account Reopening (Appeal Suspension)
+                </label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  placeholder="Explain why your account should be reopened or provide clarification for recent activities..."
+                  value={appealReasonInput}
+                  onChange={e => setAppealReasonInput(e.target.value)}
+                  style={{ width: '100%', fontSize: '0.85rem', marginBottom: '1rem' }}
+                  required
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={submittingAppeal}
+                  style={{
+                    width: '100%',
+                    justifyContent: 'center',
+                    padding: '0.75rem',
+                    background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                    fontWeight: 700,
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  <Send size={16} /> {submittingAppeal ? 'Submitting Appeal...' : 'Submit Reopening Request to Admin'}
+                </button>
+              </form>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.2rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleCheckSuspensionStatus}
+                style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <RefreshCw size={14} /> Refresh Account Status
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleLogout}
+                style={{ fontSize: '0.85rem', color: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <LogOut size={14} /> Sign Out
+              </button>
+            </div>
           </div>
         </div>
       )}

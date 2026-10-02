@@ -48,6 +48,23 @@ public class AdminController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/users/{id}/unsuspend")
+    public ResponseEntity<?> unsuspendUser(@PathVariable Long id) {
+        return adminService.updateUserStatus(id, "ACTIVE")
+                .map(user -> ResponseEntity.ok(Map.of("message", "User account unsuspended and restored to ACTIVE.", "user", user)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/users/reopen-requests")
+    public ResponseEntity<List<User>> getReopenRequests() {
+        return ResponseEntity.ok(adminService.getReopenRequests());
+    }
+
+    @GetMapping("/reopen-requests")
+    public ResponseEntity<List<User>> getReopenRequestsAlt() {
+        return ResponseEntity.ok(adminService.getReopenRequests());
+    }
+
     // ==========================================
     // 3. WORKER VERIFICATION DIRECTORY
     // ==========================================

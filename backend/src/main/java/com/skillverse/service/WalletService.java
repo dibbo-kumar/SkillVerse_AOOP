@@ -51,6 +51,10 @@ public class WalletService {
         User worker = userRepository.findById(workerId)
                 .orElseThrow(() -> new NoSuchElementException("Worker not found: " + workerId));
 
+        if ("SUSPENDED".equalsIgnoreCase(worker.getStatus())) {
+            throw new IllegalStateException("Your account has been suspended by Administrator. Wallet withdrawals are disabled while suspended.");
+        }
+
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("Cashout amount must be greater than 0.");
         }

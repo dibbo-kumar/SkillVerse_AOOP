@@ -6,6 +6,7 @@ import com.skillverse.model.WorkerProfile;
 import com.skillverse.repository.UserRepository;
 import com.skillverse.repository.WorkerProfileRepository;
 import com.skillverse.repository.VerificationRequestRepository;
+import com.skillverse.repository.AuditLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,12 +23,16 @@ public class AuthService {
     private final WorkerProfileRepository workerProfileRepository;
     private final VerificationRequestRepository verificationRequestRepository;
 
+    private final AuditLogRepository auditLogRepository;
+
     public AuthService(UserRepository userRepository,
                        WorkerProfileRepository workerProfileRepository,
-                       VerificationRequestRepository verificationRequestRepository) {
+                       VerificationRequestRepository verificationRequestRepository,
+                       AuditLogRepository auditLogRepository) {
         this.userRepository = userRepository;
         this.workerProfileRepository = workerProfileRepository;
         this.verificationRequestRepository = verificationRequestRepository;
+        this.auditLogRepository = auditLogRepository;
     }
 
     public List<User> getAllUsers() {
@@ -41,8 +46,9 @@ public class AuthService {
                 verificationRequestRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId())
                         .ifPresent(req -> {
                             if ("APPROVED".equalsIgnoreCase(req.getStatus())) {
-                                if (!user.isVerified() || !"ACTIVE".equalsIgnoreCase(user.getStatus())) {
-                                    user.setVerified(true);
+                                user.setVerified(true);
+                                // Only activate if unverified or under review, NEVER overwrite SUSPENDED status
+                                if ("UNVERIFIED".equalsIgnoreCase(user.getStatus()) || "UNDER_REVIEW".equalsIgnoreCase(user.getStatus()) || "CORRECTION_REQUIRED".equalsIgnoreCase(user.getStatus())) {
                                     user.setStatus("ACTIVE");
                                     userRepository.save(user);
                                 }
@@ -88,8 +94,9 @@ public class AuthService {
                 verificationRequestRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId())
                         .ifPresent(req -> {
                             if ("APPROVED".equalsIgnoreCase(req.getStatus())) {
-                                if (!user.isVerified() || !"ACTIVE".equalsIgnoreCase(user.getStatus())) {
-                                    user.setVerified(true);
+                                user.setVerified(true);
+                                // Only activate if unverified or under review, NEVER overwrite SUSPENDED status
+                                if ("UNVERIFIED".equalsIgnoreCase(user.getStatus()) || "UNDER_REVIEW".equalsIgnoreCase(user.getStatus()) || "CORRECTION_REQUIRED".equalsIgnoreCase(user.getStatus())) {
                                     user.setStatus("ACTIVE");
                                     userRepository.save(user);
                                 }
@@ -99,6 +106,28 @@ public class AuthService {
             return Optional.of(user);
         }
         return Optional.empty();
+    }
+
+    public Optional<User> requestAccountReopen(Long userId, String reason) {
+        return userRepository.findById(userId).map(user -> {
+            user.setReopenRequested(true);
+            user.setReopenReason(reason != null && !reason.trim().isEmpty() ? reason.trim() : "User requested account reinstatement and review.");
+            user.setReopenRequestedAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            if (auditLogRepository != null) {
+                auditLogRepository.save(new com.skillverse.model.AuditLog(
+                        "ACCOUNT_REOPEN_REQUESTED",
+                        user.getName(),
+                        user.getRole(),
+                        "User",
+                        user.getId(),
+                        "Suspended user " + user.getName() + " (" + user.getRole() + ") submitted an account reopening appeal: " + user.getReopenReason()
+                ));
+            }
+
+            return user;
+        });
     }
 
     public Optional<User> updateUser(Long id, Map<String, Object> profileMap) {

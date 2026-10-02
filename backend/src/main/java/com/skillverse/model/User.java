@@ -25,6 +25,14 @@ public class User {
     private String address = "";
 
     private String status = "ACTIVE"; // ACTIVE, SUSPENDED, DEACTIVATED
+    private String suspensionReason;
+    private java.time.LocalDateTime suspendedAt;
+
+    private Boolean reopenRequested = false;
+    @Column(columnDefinition = "TEXT")
+    private String reopenReason;
+    private java.time.LocalDateTime reopenRequestedAt;
+
     private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
 
     public User() {}
@@ -75,6 +83,21 @@ public class User {
 
     public String getStatus() { return status != null ? status : "ACTIVE"; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getSuspensionReason() { return suspensionReason; }
+    public void setSuspensionReason(String suspensionReason) { this.suspensionReason = suspensionReason; }
+
+    public java.time.LocalDateTime getSuspendedAt() { return suspendedAt; }
+    public void setSuspendedAt(java.time.LocalDateTime suspendedAt) { this.suspendedAt = suspendedAt; }
+
+    public boolean isReopenRequested() { return reopenRequested != null && reopenRequested; }
+    public void setReopenRequested(Boolean reopenRequested) { this.reopenRequested = reopenRequested; }
+
+    public String getReopenReason() { return reopenReason; }
+    public void setReopenReason(String reopenReason) { this.reopenReason = reopenReason; }
+
+    public java.time.LocalDateTime getReopenRequestedAt() { return reopenRequestedAt; }
+    public void setReopenRequestedAt(java.time.LocalDateTime reopenRequestedAt) { this.reopenRequestedAt = reopenRequestedAt; }
 
     public java.time.LocalDateTime getCreatedAt() { return createdAt != null ? createdAt : java.time.LocalDateTime.now(); }
     public void setCreatedAt(java.time.LocalDateTime createdAt) { this.createdAt = createdAt; }

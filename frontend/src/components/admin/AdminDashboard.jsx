@@ -161,10 +161,46 @@ export default function AdminDashboard({ currentUser, onShowToast }) {
     try {
       const res = await fetch(`${API_BASE}/admin/users/${userId}/status?status=${nextStatus}`, { method: 'PUT' });
       if (res.ok) {
-        setUsersList(prev => prev.map(u => u.id === userId ? { ...u, status: nextStatus } : u));
+        setUsersList(prev => prev.map(u => u.id === userId ? {
+          ...u,
+          status: nextStatus,
+          reopenRequested: nextStatus === 'ACTIVE' ? false : u.reopenRequested,
+          reopenReason: nextStatus === 'ACTIVE' ? null : u.reopenReason
+        } : u));
         if (selectedUser && selectedUser.id === userId) {
-          setSelectedUser(prev => ({ ...prev, status: nextStatus }));
+          setSelectedUser(prev => ({
+            ...prev,
+            status: nextStatus,
+            reopenRequested: nextStatus === 'ACTIVE' ? false : prev.reopenRequested,
+            reopenReason: nextStatus === 'ACTIVE' ? null : prev.reopenReason
+          }));
         }
+        if (onShowToast) {
+          onShowToast(
+            nextStatus === 'ACTIVE' ? "User Restored" : "User Suspended",
+            `User account has been ${nextStatus === 'ACTIVE' ? 'unsuspended and activated' : 'suspended from all operations'}.`,
+            nextStatus === 'ACTIVE' ? "success" : "info"
+          );
+        }
+        fetchDashboardData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUnsuspendUser = async (userId) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}/unsuspend`, { method: 'PUT' });
+      if (res.ok) {
+        setUsersList(prev => prev.map(u => u.id === userId ? { ...u, status: 'ACTIVE', reopenRequested: false, reopenReason: null } : u));
+        if (selectedUser && selectedUser.id === userId) {
+          setSelectedUser(prev => ({ ...prev, status: 'ACTIVE', reopenRequested: false, reopenReason: null }));
+        }
+        if (onShowToast) {
+          onShowToast("Account Reopened", "User account has been unsuspended and restored to ACTIVE.", "success");
+        }
+        fetchDashboardData();
       }
     } catch (e) {
       console.error(e);
@@ -699,6 +735,71 @@ export default function AdminDashboard({ currentUser, onShowToast }) {
               </div>
             )}
 
+            {/* Account Reopen Appeals & Suspended Users Queue */}
+            {usersList.filter(u => u.reopenRequested || u.status === 'SUSPENDED').length > 0 && (
+              <div className="glass-card" style={{ padding: '1.2rem 1.5rem', marginBottom: '1.5rem', borderLeft: '4px solid #ef4444', background: 'rgba(239, 68, 68, 0.04)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <AlertCircle size={20} color="#ef4444" />
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-heading)' }}>
+                      Account Reopening Appeals & Suspended Accounts ({usersList.filter(u => u.reopenRequested || u.status === 'SUSPENDED').length})
+                    </h3>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Suspended users cannot perform actions until unsuspended by Admin
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
+                  {usersList.filter(u => u.reopenRequested || u.status === 'SUSPENDED').map(u => (
+                    <div key={u.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <img src={u.profilePicture || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"} alt={u.name} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span>{u.name}</span>
+                              <span className="badge" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fee2e2', fontSize: '0.68rem' }}>SUSPENDED</span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.role} • {u.phone} • {u.email}</div>
+                          </div>
+                        </div>
+                        
+                        {u.reopenRequested ? (
+                          <div style={{ fontSize: '0.8rem', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '0.65rem 0.8rem', borderRadius: '8px', marginBottom: '0.8rem' }}>
+                            <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
+                              <span>📩 Reopening Appeal Submitted:</span>
+                            </div>
+                            <div style={{ fontStyle: 'italic', color: '#78350f' }}>
+                              "{u.reopenReason || 'Account reinstatement requested by user.'}"
+                            </div>
+                            {u.reopenRequestedAt && (
+                              <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: '0.3rem' }}>
+                                Requested at: {new Date(u.reopenRequestedAt).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '0.78rem', background: 'rgba(0,0,0,0.03)', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '0.8rem', color: 'var(--text-secondary)' }}>
+                            <span>Status: Suspended (No appeal submitted yet)</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                        <button
+                          className="btn btn-primary"
+                          style={{ background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontSize: '0.78rem', padding: '0.4rem 0.85rem' }}
+                          onClick={() => handleUnsuspendUser(u.id)}
+                        >
+                          <CheckCircle2 size={14} /> Unsuspend & Restore Account
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Filter & Search Bar */}
             <div className="glass-card" style={{ padding: '1rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: '1 1 280px' }}>
@@ -836,7 +937,17 @@ export default function AdminDashboard({ currentUser, onShowToast }) {
                               )}
                             </td>
                             <td style={{ padding: '0.9rem 1rem' }}>
-                              {renderStatusBadge(u.status || 'ACTIVE')}
+                              {u.status === 'SUSPENDED' ? (
+                                u.reopenRequested ? (
+                                  <span className="badge" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                                    ⏳ Appeal Pending
+                                  </span>
+                                ) : (
+                                  <span className="badge badge-danger">SUSPENDED 🚫</span>
+                                )
+                              ) : (
+                                renderStatusBadge(u.status || 'ACTIVE')
+                              )}
                             </td>
                             <td style={{ padding: '0.9rem 1.2rem', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
@@ -849,19 +960,35 @@ export default function AdminDashboard({ currentUser, onShowToast }) {
                                   <Eye size={13} /> Details
                                 </button>
                                 {u.role !== 'ADMIN' && (
-                                  <button
-                                    className="btn btn-secondary"
-                                    style={{
-                                      padding: '0.35rem 0.65rem',
-                                      fontSize: '0.75rem',
-                                      color: u.status === 'SUSPENDED' ? '#10b981' : '#ef4444',
-                                      borderColor: u.status === 'SUSPENDED' ? '#10b981' : '#ef4444'
-                                    }}
-                                    onClick={() => handleToggleUserStatus(u.id, u.status || 'ACTIVE')}
-                                  >
-                                    {u.status === 'SUSPENDED' ? <UserCheck size={13} /> : <UserX size={13} />}
-                                    {u.status === 'SUSPENDED' ? 'Activate' : 'Suspend'}
-                                  </button>
+                                  u.status === 'SUSPENDED' ? (
+                                    <button
+                                      className="btn btn-primary"
+                                      style={{
+                                        padding: '0.35rem 0.65rem',
+                                        fontSize: '0.75rem',
+                                        background: 'linear-gradient(135deg, #059669, #047857)',
+                                        color: '#fff'
+                                      }}
+                                      onClick={() => handleUnsuspendUser(u.id)}
+                                      title="Unsuspend & Restore User Account"
+                                    >
+                                      <UserCheck size={13} /> Unsuspend
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="btn btn-secondary"
+                                      style={{
+                                        padding: '0.35rem 0.65rem',
+                                        fontSize: '0.75rem',
+                                        color: '#ef4444',
+                                        borderColor: '#ef4444'
+                                      }}
+                                      onClick={() => handleToggleUserStatus(u.id, u.status || 'ACTIVE')}
+                                      title="Suspend User Account"
+                                    >
+                                      <UserX size={13} /> Suspend
+                                    </button>
+                                  )
                                 )}
                               </div>
                             </td>

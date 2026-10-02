@@ -89,6 +89,13 @@ public class BookingService {
             throw new IllegalArgumentException("Invalid Customer or Worker ID");
         }
 
+        if ("SUSPENDED".equalsIgnoreCase(customer.getStatus())) {
+            throw new IllegalStateException("Your account has been suspended by Administrator. You cannot create bookings while suspended.");
+        }
+        if ("SUSPENDED".equalsIgnoreCase(worker.getStatus())) {
+            throw new IllegalStateException("Selected technician is currently suspended and unavailable for bookings.");
+        }
+
         Double initialPrice = request.getEstimatedCost() != null ? request.getEstimatedCost() : 1000.0;
 
         Double workerBasePrice = 300.0;
@@ -188,7 +195,7 @@ public class BookingService {
             if (hasActiveWarrantyClaim(worker.getId())) {
                 throw new IllegalStateException("Cannot accept new work. You have an active warranty claim that must be resolved first.");
             }
-            if (!"ACTIVE".equalsIgnoreCase(worker.getStatus())) {
+            if ("UNVERIFIED".equalsIgnoreCase(worker.getStatus()) || "UNDER_REVIEW".equalsIgnoreCase(worker.getStatus())) {
                 worker.setStatus("ACTIVE");
                 userRepository.save(worker);
             }
@@ -252,7 +259,7 @@ public class BookingService {
                 if (hasActiveWarrantyClaim(worker.getId())) {
                     throw new IllegalStateException("Cannot submit counter offers. You have an active warranty claim that must be resolved first.");
                 }
-                if (!"ACTIVE".equalsIgnoreCase(worker.getStatus())) {
+                if ("UNVERIFIED".equalsIgnoreCase(worker.getStatus()) || "UNDER_REVIEW".equalsIgnoreCase(worker.getStatus())) {
                     worker.setStatus("ACTIVE");
                     userRepository.save(worker);
                 }
