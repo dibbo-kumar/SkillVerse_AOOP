@@ -23,6 +23,55 @@ import {
 
 const API_BASE = "http://localhost:8081/api";
 
+function AutoCancelTimer({ createdAt }) {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!createdAt) return;
+      const createdTime = new Date(createdAt).getTime();
+      const expireTime = createdTime + 15 * 60 * 1000; // 15 minutes
+      const diff = expireTime - Date.now();
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setIsExpired(true);
+      } else {
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        setIsExpired(false);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.74rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isExpired ? '#ef4444' : '#f59e0b',
+        background: isExpired ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+        border: isExpired ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(245, 158, 11, 0.35)',
+        padding: '0.2rem 0.5rem',
+        borderRadius: '6px'
+      }}
+    >
+      <Clock size={12} />
+      {isExpired ? 'Auto-cancelled (Expired)' : `Expires in ${timeLeft}`}
+    </span>
+  );
+}
+
 function ModalArrivalTimer({ booking, onTimeoutRefund }) {
   const [timeLeft, setTimeLeft] = useState('');
   const [isExpired, setIsExpired] = useState(false);
@@ -176,6 +225,22 @@ export default function BookingDetailsModal({
         <div className="modal-two-col">
           {/* Left Column: Technician, OTP, Timer, Negotiation / Advance banners */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+            {/* Pending Confirmation Banner */}
+            {booking.status === 'PENDING' && (
+              <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '10px', padding: '0.75rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#60a5fa' }}>
+                    <Clock size={15} />
+                    <strong style={{ fontSize: '0.85rem' }}>Awaiting Technician Confirmation</strong>
+                  </div>
+                  <AutoCancelTimer createdAt={booking.createdAt} />
+                </div>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  Technician has been assigned this booking slot. If not accepted within 15 minutes, it will automatically cancel.
+                </p>
+              </div>
+            )}
+
             {/* Worker Counter Offer Banner */}
             {isWorkerCounter && (
               <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '10px', padding: '0.75rem 0.9rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -313,8 +378,9 @@ export default function BookingDetailsModal({
                 <strong style={{ color: 'var(--text-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{booking.address || (booking.description?.match(/\[Location:\s*(.*?)\]/)?.[1]) || 'Customer Location'}</strong>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Schedule</span>
-                <strong style={{ color: 'var(--text-heading)' }}>{booking.preferredDate || 'Tomorrow'}</strong>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Scheduled Slot</span>
+                <strong style={{ color: 'var(--text-heading)', display: 'block' }}>📅 {booking.preferredDate || 'Tomorrow'}</strong>
+                <span style={{ color: 'var(--primary)', fontWeight: 600, fontSize: '0.74rem' }}>⏰ {booking.preferredTime || '10:00 AM - 12:00 PM'}</span>
               </div>
             </div>
 

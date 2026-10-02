@@ -385,3 +385,24 @@ select u1_0.id,u1_0.address,u1_0.created_at,u1_0.email,u1_0.is_verified,u1_0.lat
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:1570)
+2026-10-03 00:45:55.214950+06:00 jdbc[104]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+ALTER TABLE service_bookings ALTER COLUMN id RESTART WITH 2000 [42102-224]
+2026-10-03 00:46:45.609453+06:00 jdbc[4]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+ALTER TABLE service_bookings ALTER COLUMN id RESTART WITH 2000 [42102-224]
+2026-10-03 00:46:52.583571+06:00 jdbc[14]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+ALTER TABLE service_bookings ALTER COLUMN id RESTART WITH 2000 [42102-224]
+2026-10-03 00:48:07.148777+06:00 jdbc[4]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+ALTER TABLE service_bookings ALTER COLUMN id RESTART WITH 2000 [42102-224]
+2026-10-03 00:48:14.063568+06:00 jdbc[14]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+ALTER TABLE service_bookings ALTER COLUMN id RESTART WITH 2000 [42102-224]
+2026-10-03 00:49:08.295673+06:00 jdbc[4]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+SELECT COALESCE(MAX(id), 0) FROM service_bookings [42102-224]
+2026-10-03 00:49:15.770951+06:00 jdbc[14]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Table "SERVICE_BOOKINGS" not found; SQL statement:
+SELECT COALESCE(MAX(id), 0) FROM service_bookings [42102-224]

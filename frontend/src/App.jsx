@@ -1110,6 +1110,34 @@ function App() {
   const [selectedPhotoPreset, setSelectedPhotoPreset] = useState(null);
   const [customPhotoUrl, setCustomPhotoUrl] = useState('');
 
+  // Schedule slot state
+  const [bookingDate, setBookingDate] = useState('Tomorrow');
+  const [bookingCustomDate, setBookingCustomDate] = useState('');
+  const [bookingTimeSlot, setBookingTimeSlot] = useState('10:00 AM - 12:00 PM');
+  const [bookedSlotsForWorker, setBookedSlotsForWorker] = useState([]);
+  const [loadingBookedSlots, setLoadingBookedSlots] = useState(false);
+
+  const fetchBookedSlots = async (workerId, dateStr) => {
+    if (!workerId || !dateStr) {
+      setBookedSlotsForWorker([]);
+      return;
+    }
+    setLoadingBookedSlots(true);
+    try {
+      const res = await fetch(`${API_BASE}/bookings/worker/${workerId}/booked-slots?date=${encodeURIComponent(dateStr)}`);
+      if (res.ok) {
+        const slots = await res.json();
+        setBookedSlotsForWorker(slots || []);
+      } else {
+        setBookedSlotsForWorker([]);
+      }
+    } catch (e) {
+      setBookedSlotsForWorker([]);
+    } finally {
+      setLoadingBookedSlots(false);
+    }
+  };
+
   // Floating Toast alert popup handler
   const showToast = (title, message, type = 'success', onDone = null) => {
     setToastPopup({ title, message, type, onDone });
@@ -1918,14 +1946,13 @@ function App() {
   };
 
   const handleOpenBookingModalWithOptions = (options = {}) => {
+    let targetWorker = null;
     if (options.worker) {
+      targetWorker = options.worker;
       setSelectedWorker(options.worker);
     } else if (workers.length > 0) {
-      const matched = workers.find(w => w.user?.verified || w.verified) || workers[0];
-      setSelectedWorker(matched);
-    }
-    if (options.serviceType) {
-      // prefill
+      targetWorker = workers.find(w => w.user?.verified || w.verified) || workers[0];
+      setSelectedWorker(targetWorker);
     }
     if (options.suggestedCost) {
       setBookingCost(options.suggestedCost);
@@ -1933,6 +1960,12 @@ function App() {
     if (options.description) {
       setBookingDesc(options.description);
     }
+    const initDate = options.preferredDate || 'Tomorrow';
+    const initTime = options.preferredTime || '10:00 AM - 12:00 PM';
+    setBookingDate(initDate);
+    setBookingTimeSlot(initTime);
+    setBookingCustomDate('');
+
     if (options.propertyAddress) {
       setBookingAddress(options.propertyAddress);
     } else {
@@ -1940,11 +1973,28 @@ function App() {
       const activeCustAddr = customerLocation?.address || currentUser?.address || (defaultAddr ? (defaultAddr.address || defaultAddr.fullAddress) : 'Sector 12, Uttara, Dhaka');
       setBookingAddress(activeCustAddr);
     }
+
+    const wId = targetWorker?.user?.id || targetWorker?.id;
+    if (wId) {
+      fetchBookedSlots(wId, initDate);
+    }
   };
 
   // Create service order booking
   const handleCreateBooking = async () => {
     if (!selectedWorker) return;
+    const effectiveDate = bookingDate === 'Custom Date' && bookingCustomDate ? bookingCustomDate : bookingDate;
+    
+    // Check if worker is busy in that slot
+    if (bookedSlotsForWorker.includes(bookingTimeSlot)) {
+      showToast(
+        "Technician is Busy",
+        `⚠️ ${selectedWorker.user?.name || selectedWorker.name || 'Technician'} is already booked in the ${bookingTimeSlot} slot on ${effectiveDate}.\n\nPlease choose another time slot or try another technician.`,
+        "error"
+      );
+      return;
+    }
+
     const finalPrice = offeredPrice ? Number(offeredPrice) : bookingCost;
     const photoToSend = selectedPhotoPreset ? selectedPhotoPreset.url : (customPhotoUrl || "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?w=300");
     const chosenAddress = bookingAddress || addresses.find(a => a.isDefault)?.address || addresses.find(a => a.isDefault)?.fullAddress || 'Uttara Sector 12, Dhaka';
@@ -1963,9 +2013,11 @@ function App() {
           serviceType: workerServiceType,
           estimatedCost: finalPrice,
           basePrice: workerBasePrice,
+          preferredDate: effectiveDate,
+          preferredTime: bookingTimeSlot,
           beforePhoto: photoToSend,
           address: chosenAddress,
-          description: `${bookingDesc || "Standard service request."} [Location: ${chosenAddress}]`
+          description: `${bookingDesc || "Standard service request."} [Schedule: ${effectiveDate} ${bookingTimeSlot}] [Location: ${chosenAddress}]`
         })
       });
       if (res.ok) {
@@ -1973,6 +2025,8 @@ function App() {
         created.address = chosenAddress;
         created.beforePhoto = photoToSend;
         created.basePrice = workerBasePrice;
+        created.preferredDate = effectiveDate;
+        created.preferredTime = bookingTimeSlot;
 
         // Immediately add to local state
         setBookings(prev => [created, ...prev]);
@@ -1983,13 +2037,19 @@ function App() {
         setBookingAddress('');
         setSelectedPhotoPreset(null);
         setCustomPhotoUrl('');
+        setBookingDate('Tomorrow');
+        setBookingCustomDate('');
+        setBookingTimeSlot('10:00 AM - 12:00 PM');
         fetchCustomerBookings();
         showToast(
           "Booking Request Dispatched!",
-          `🎉 Request sent to ${workerUserName}!\n\nOnce the technician accepts/counters, confirm by paying the minimum base advance (BDT ${workerBasePrice} + 5% VAT). Timer starts immediately upon advance payment!`,
+          `🎉 Request scheduled for ${effectiveDate} (${bookingTimeSlot}) sent to ${workerUserName}!\n\nTechnician has 15 minutes to accept. Once confirmed, pay minimum base advance (BDT ${workerBasePrice} + 5% VAT) to lock the dispatch.`,
           "success",
           () => setActiveTab('my-bookings')
         );
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast("Booking Request Notice", errData.error || "Selected technician is busy or unable to take booking.", "error");
       }
     } catch (e) {
       // Fallback local creation if backend offline
@@ -2001,6 +2061,8 @@ function App() {
         estimatedCost: finalPrice,
         basePrice: workerBasePrice,
         status: 'PENDING',
+        preferredDate: effectiveDate,
+        preferredTime: bookingTimeSlot,
         scheduledTime: new Date().toISOString(),
         description: bookingDesc || "Standard maintenance request.",
         address: chosenAddress,
@@ -3829,6 +3891,117 @@ function App() {
                     value={offeredPrice}
                     onChange={e => setOfferedPrice(e.target.value)}
                   />
+                </div>
+
+                {/* --- SCHEDULE: DATE & TIME SLOT SELECTION --- */}
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.65rem 0.8rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label" style={{ fontSize: '0.74rem', margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Calendar size={13} color="var(--primary)" /> Preferred Date & Time Slot
+                    </label>
+                    {loadingBookedSlots && (
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Checking slots...</span>
+                    )}
+                  </div>
+
+                  {/* Date Chips */}
+                  <div>
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                      {['Today', 'Tomorrow', 'In 2 Days', 'Custom Date'].map(dOpt => (
+                        <button
+                          key={dOpt}
+                          type="button"
+                          className={`btn ${bookingDate === dOpt ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => {
+                            setBookingDate(dOpt);
+                            const wId = selectedWorker.user?.id || selectedWorker.id;
+                            fetchBookedSlots(wId, dOpt === 'Custom Date' && bookingCustomDate ? bookingCustomDate : dOpt);
+                          }}
+                        >
+                          {dOpt}
+                        </button>
+                      ))}
+                    </div>
+
+                    {bookingDate === 'Custom Date' && (
+                      <input
+                        type="date"
+                        className="form-input"
+                        style={{ fontSize: '0.76rem', padding: '0.25rem 0.5rem', marginTop: '0.2rem' }}
+                        min={new Date().toISOString().split('T')[0]}
+                        value={bookingCustomDate}
+                        onChange={e => {
+                          setBookingCustomDate(e.target.value);
+                          const wId = selectedWorker.user?.id || selectedWorker.id;
+                          fetchBookedSlots(wId, e.target.value);
+                        }}
+                        required
+                      />
+                    )}
+                  </div>
+
+                  {/* Time Slots Grid */}
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Select Slot:</span>
+                      <span style={{ fontSize: '0.65rem', color: bookedSlotsForWorker.length > 0 ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                        {bookedSlotsForWorker.length > 0 ? `⚠️ ${bookedSlotsForWorker.length} slot(s) busy` : '✓ All slots available'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                      {[
+                        '08:00 AM - 10:00 AM',
+                        '10:00 AM - 12:00 PM',
+                        '12:00 PM - 02:00 PM',
+                        '02:00 PM - 04:00 PM',
+                        '04:00 PM - 06:00 PM',
+                        '06:00 PM - 08:00 PM',
+                        '08:00 PM - 10:00 PM'
+                      ].map(slot => {
+                        const isBooked = bookedSlotsForWorker.includes(slot);
+                        const isSelected = bookingTimeSlot === slot;
+
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            disabled={isBooked}
+                            onClick={() => setBookingTimeSlot(slot)}
+                            style={{
+                              padding: '0.35rem 0.4rem',
+                              borderRadius: '6px',
+                              border: isSelected
+                                ? '2px solid var(--primary)'
+                                : isBooked
+                                ? '1px dashed rgba(239, 68, 68, 0.4)'
+                                : '1px solid var(--border-color)',
+                              background: isSelected
+                                ? 'rgba(59, 130, 246, 0.15)'
+                                : isBooked
+                                ? 'rgba(239, 68, 68, 0.08)'
+                                : 'var(--bg-card)',
+                              color: isBooked ? '#ef4444' : isSelected ? 'var(--primary)' : 'var(--text-primary)',
+                              fontSize: '0.7rem',
+                              cursor: isBooked ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: isBooked ? 0.65 : 1,
+                              transition: 'all 0.12s ease'
+                            }}
+                          >
+                            <span style={{ fontWeight: isSelected ? 700 : 500 }}>{slot}</span>
+                            {isBooked && (
+                              <span style={{ fontSize: '0.6rem', color: '#ef4444', fontWeight: 700 }}>Busy / Booked 🚫</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Service Location Selector */}

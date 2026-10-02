@@ -39,6 +39,57 @@ const formatSkillsList = (list) => {
   return list.map(item => `${item.skill} (${item.years} yrs)`).join(', ');
 };
 
+function AutoCancelTimer({ createdAt, onExpired }) {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!createdAt) return;
+      const createdTime = new Date(createdAt).getTime();
+      const expireTime = createdTime + 15 * 60 * 1000; // 15 minutes
+      const diff = expireTime - Date.now();
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setIsExpired(true);
+        if (onExpired) onExpired();
+      } else {
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        setIsExpired(false);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.72rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isExpired ? '#ef4444' : '#f59e0b',
+        background: isExpired ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+        border: isExpired ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+        padding: '0.2rem 0.45rem',
+        borderRadius: '6px'
+      }}
+      title="Request will be automatically cancelled after 15 minutes if not accepted"
+    >
+      <Clock size={11} />
+      {isExpired ? 'Will be cancelled (Expired)' : `Will be cancelled in ${timeLeft}`}
+    </span>
+  );
+}
+
 export default function WorkerDashboard({ currentWorker, onShowToast }) {
   const [activeSubTab, setActiveSubTab] = useState('active-job'); // 'active-job', 'requests', 'problems', 'wallet', 'history', 'verification'
   const [workerBookings, setWorkerBookings] = useState([]);
@@ -1280,10 +1331,15 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                     background: isAwaitingAdvance ? 'rgba(245, 158, 11, 0.05)' : isCustomerOffer ? 'rgba(59, 130, 246, 0.05)' : 'rgba(255,255,255,0.02)'
                   }}
                 >
-                  {/* Column 1: ID & Status */}
+                  {/* Column 1: ID, Status & Expiry Timer */}
                   <div>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', display: 'block' }}>#BK-{b.id}</span>
                     <span className="badge badge-pending" style={{ marginTop: '0.3rem' }}>{b.status}</span>
+                    {b.status === 'PENDING' && (
+                      <div style={{ marginTop: '0.4rem' }}>
+                        <AutoCancelTimer createdAt={b.createdAt} onExpired={fetchWorkerData} />
+                      </div>
+                    )}
                   </div>
 
                   {/* Column 2: Service & Problem */}
@@ -1300,10 +1356,14 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                     )}
                   </div>
 
-                  {/* Column 3: Customer info */}
+                  {/* Column 3: Customer info & Schedule */}
                   <div>
                     <strong style={{ fontSize: '0.85rem', color: 'var(--text-heading)', display: 'block' }}>{b.customer?.name}</strong>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>📍 {b.address || (b.description?.match(/\[Location:\s*(.*?)\]/)?.[1]) || b.customer?.address || 'Customer Location'}</span>
+                    <div style={{ marginTop: '0.35rem', fontSize: '0.75rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(59, 130, 246, 0.08)', padding: '0.2rem 0.4rem', borderRadius: '5px' }}>
+                      <Clock size={12} />
+                      <span>📅 <strong>{b.preferredDate || 'Tomorrow'}</strong> • {b.preferredTime || '10:00 AM'}</span>
+                    </div>
                   </div>
 
                   {/* Column 4: Offered & Base Price */}

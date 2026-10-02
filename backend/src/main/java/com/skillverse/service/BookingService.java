@@ -47,20 +47,63 @@ public class BookingService {
         }
     }
 
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 15000)
+    public void autoExpirePendingBookings() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        List<ServiceBooking> pendingBookings = bookingRepository.findAll().stream()
+                .filter(b -> "PENDING".equalsIgnoreCase(b.getStatus()) && b.getCreatedAt() != null && b.getCreatedAt().isBefore(cutoff))
+                .toList();
+        for (ServiceBooking b : pendingBookings) {
+            b.setStatus("CANCELLED");
+            b.setUpdatedAt(LocalDateTime.now());
+            bookingRepository.save(b);
+            if (b.getCustomer() != null) {
+                notificationService.sendNotification(b.getCustomer(), "Booking Request Auto-Expired",
+                        "Your booking request (#BK-" + b.getId() + ") for " + b.getServiceType() + " expired automatically as technician did not respond within 15 minutes. Please try another time slot or worker.",
+                        "BOOKING_EXPIRED", b.getId());
+            }
+            if (b.getWorker() != null) {
+                notificationService.sendNotification(b.getWorker(), "Booking Request Missed",
+                        "Booking request (#BK-" + b.getId() + ") from " + (b.getCustomer() != null ? b.getCustomer().getName() : "Customer") + " expired automatically after 15 minutes without response.",
+                        "BOOKING_MISSED", b.getId());
+            }
+        }
+    }
+
     public List<ServiceBooking> getAllBookings() {
+        autoExpirePendingBookings();
         return bookingRepository.findAll();
     }
 
     public Optional<ServiceBooking> getById(Long id) {
+        autoExpirePendingBookings();
         return bookingRepository.findById(id);
     }
 
     public List<ServiceBooking> getCustomerBookings(Long customerId) {
+        autoExpirePendingBookings();
         return bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
     }
 
     public List<ServiceBooking> getWorkerBookings(Long workerId) {
+        autoExpirePendingBookings();
         return bookingRepository.findByWorkerIdOrderByCreatedAtDesc(workerId);
+    }
+
+    public List<String> getBookedSlots(Long workerId, String date) {
+        if (workerId == null || date == null || date.trim().isEmpty()) {
+            return List.of();
+        }
+        autoExpirePendingBookings();
+        String targetDate = date.trim();
+        List<String> activeStatuses = List.of("PENDING", "NEGOTIATING", "PRICE_AGREED", "AWAITING_ADVANCE", "CONFIRMED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS", "COMPLETION_REQUESTED");
+        return bookingRepository.findByWorkerId(workerId).stream()
+                .filter(b -> activeStatuses.contains(b.getStatus())
+                        && targetDate.equalsIgnoreCase(b.getPreferredDate() != null ? b.getPreferredDate().trim() : "")
+                        && b.getPreferredTime() != null && !b.getPreferredTime().trim().isEmpty())
+                .map(b -> b.getPreferredTime().trim())
+                .distinct()
+                .toList();
     }
 
     public boolean isWorkerBusy(Long workerId, Long currentBookingId) {
@@ -82,6 +125,7 @@ public class BookingService {
     }
 
     public ServiceBooking save(BookingRequest request) {
+        autoExpirePendingBookings();
         User customer = userRepository.findById(request.getCustomerId()).orElse(null);
         User worker = userRepository.findById(request.getWorkerId()).orElse(null);
 
@@ -94,6 +138,21 @@ public class BookingService {
         }
         if ("SUSPENDED".equalsIgnoreCase(worker.getStatus())) {
             throw new IllegalStateException("Selected technician is currently suspended and unavailable for bookings.");
+        }
+
+        String preferredDate = request.getPreferredDate() != null && !request.getPreferredDate().trim().isEmpty()
+                ? request.getPreferredDate().trim() : "Tomorrow";
+        String preferredTime = request.getPreferredTime() != null && !request.getPreferredTime().trim().isEmpty()
+                ? request.getPreferredTime().trim() : "10:00 AM - 12:00 PM";
+
+        List<String> activeStatuses = List.of("PENDING", "NEGOTIATING", "PRICE_AGREED", "AWAITING_ADVANCE", "CONFIRMED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS", "COMPLETION_REQUESTED");
+        boolean isSlotBooked = bookingRepository.findByWorkerId(worker.getId()).stream()
+                .anyMatch(b -> activeStatuses.contains(b.getStatus())
+                        && preferredDate.equalsIgnoreCase(b.getPreferredDate() != null ? b.getPreferredDate().trim() : "")
+                        && preferredTime.equalsIgnoreCase(b.getPreferredTime() != null ? b.getPreferredTime().trim() : ""));
+
+        if (isSlotBooked) {
+            throw new IllegalStateException("Selected technician is already booked or busy in this time slot (" + preferredDate + " | " + preferredTime + "). Please choose another slot or select a different technician.");
         }
 
         Double initialPrice = request.getEstimatedCost() != null ? request.getEstimatedCost() : 1000.0;
@@ -109,7 +168,8 @@ public class BookingService {
         booking.setWorker(worker);
         booking.setServiceType(request.getServiceType());
         booking.setScheduledTime(LocalDateTime.now().plusDays(1));
-        booking.setPreferredDate(request.getPreferredDate() != null ? request.getPreferredDate() : "Tomorrow");
+        booking.setPreferredDate(preferredDate);
+        booking.setPreferredTime(preferredTime);
         String serviceAddress = request.getAddress();
         if (serviceAddress == null || serviceAddress.trim().isEmpty()) {
             if (request.getDescription() != null && request.getDescription().contains("[Location:")) {
@@ -154,7 +214,7 @@ public class BookingService {
         ServiceBooking saved = bookingRepository.save(booking);
 
         notificationService.sendNotification(worker, "New Booking Request",
-                "Customer " + customer.getName() + " requested " + booking.getServiceType() + " with offer ৳" + initialPrice + " (Base Advance: ৳" + workerBasePrice + ").",
+                "Customer " + customer.getName() + " requested " + booking.getServiceType() + " for " + preferredDate + " (" + preferredTime + ") with offer ৳" + initialPrice + " (Base Advance: ৳" + workerBasePrice + ").",
                 "BOOKING_REQUEST", saved.getId());
 
         return saved;

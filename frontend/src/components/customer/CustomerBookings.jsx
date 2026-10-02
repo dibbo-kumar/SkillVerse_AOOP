@@ -89,6 +89,55 @@ function ArrivalCountdownTimer({ booking, onTimeoutRefund }) {
   );
 }
 
+function AutoCancelTimer({ createdAt }) {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!createdAt) return;
+      const createdTime = new Date(createdAt).getTime();
+      const expireTime = createdTime + 15 * 60 * 1000; // 15 minutes
+      const diff = expireTime - Date.now();
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setIsExpired(true);
+      } else {
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        setIsExpired(false);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.72rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isExpired ? '#ef4444' : '#f59e0b',
+        background: isExpired ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+        border: isExpired ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(245, 158, 11, 0.35)',
+        padding: '0.15rem 0.45rem',
+        borderRadius: '6px'
+      }}
+    >
+      <Clock size={11} />
+      {isExpired ? 'Expired' : `Expires in ${timeLeft}`}
+    </span>
+  );
+}
+
 export default function CustomerBookings({
   bookings = [],
   onAcceptCounterOffer,
@@ -411,8 +460,13 @@ export default function CustomerBookings({
                     <div className="booking-price-label">{b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'COMPLETED' ? 'Agreed Deal' : 'Current Price'}</div>
                     <div className="booking-price-val">৳{currentPrice}</div>
                     <span className="booking-date-tag">
-                      <Clock size={13} /> {b.scheduledTime ? new Date(b.scheduledTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Scheduled for today'}
+                      <Clock size={13} /> {b.preferredDate ? `📅 ${b.preferredDate} (${b.preferredTime || '10:00 AM'})` : b.scheduledTime ? new Date(b.scheduledTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Scheduled for today'}
                     </span>
+                    {b.status === 'PENDING' && (
+                      <div style={{ marginTop: '0.25rem' }}>
+                        <AutoCancelTimer createdAt={b.createdAt} />
+                      </div>
+                    )}
                     <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', marginTop: '0.2rem', display: 'block' }}>
                       Base Advance: <strong>৳{b.basePrice || 300}</strong> (+5% VAT)
                     </span>

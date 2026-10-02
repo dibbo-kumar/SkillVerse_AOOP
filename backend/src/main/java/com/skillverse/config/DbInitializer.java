@@ -95,6 +95,17 @@ public class DbInitializer implements CommandLineRunner {
                                 }
                         }
                 } catch (Exception ignored) {}
+
+                try {
+                        Long maxUserId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) FROM users", Long.class);
+                        if (maxUserId != null) {
+                                jdbcTemplate.execute("ALTER TABLE users ALTER COLUMN id RESTART WITH " + (maxUserId + 1));
+                        }
+                        Long maxBookingId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) FROM service_bookings", Long.class);
+                        if (maxBookingId != null) {
+                                jdbcTemplate.execute("ALTER TABLE service_bookings ALTER COLUMN id RESTART WITH " + (maxBookingId + 1));
+                        }
+                } catch (Exception ignored) {}
         }
 
         private void seedVerificationData() {

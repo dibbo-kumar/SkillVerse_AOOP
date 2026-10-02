@@ -85,6 +85,15 @@ public class BookingController {
     }
 
     /**
+     * Get Booked / Busy Slots for a Worker on a given date with PathVariable and RequestParam
+     */
+    @GetMapping("/worker/{workerId}/booked-slots")
+    public ResponseEntity<List<String>> getBookedSlots(@PathVariable Long workerId,
+                                                       @RequestParam(required = false) String date) {
+        return ResponseEntity.ok(bookingService.getBookedSlots(workerId, date));
+    }
+
+    /**
      * Accept price deal with PathVariable and RequestParam
      */
     @PutMapping("/{id}/accept-price")

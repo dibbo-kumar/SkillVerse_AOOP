@@ -11,8 +11,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.springframework.test.annotation.DirtiesContext;
+
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 public class AuthControllerTest {
 
     @Autowired
@@ -40,10 +43,12 @@ public class AuthControllerTest {
 
     @Test
     void testRegisterNewCustomer() throws Exception {
-        String uniqueEmail = "testuser_" + System.currentTimeMillis() + "@example.com";
+        long ts = System.currentTimeMillis();
+        String uniqueEmail = "testuser_" + ts + "@example.com";
+        String uniquePhone = "017" + (ts % 100000000L);
         String userJson = String.format(
-            "{\"name\":\"Test Customer\",\"email\":\"%s\",\"phone\":\"01799887766\",\"role\":\"CUSTOMER\",\"password\":\"password123\"}",
-            uniqueEmail
+            "{\"name\":\"Test Customer\",\"email\":\"%s\",\"phone\":\"%s\",\"role\":\"CUSTOMER\",\"password\":\"password123\"}",
+            uniqueEmail, uniquePhone
         );
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -1,9 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   XCircle, CheckCircle2, Clock, MapPin, DollarSign, User, Phone, KeyRound,
   Wrench, ShieldCheck, FileText, Star, ArrowRight, Play, Camera, Image,
   Upload, Navigation, AlertCircle, Sparkles, Check, CheckCheck
 } from 'lucide-react';
+
+function AutoCancelTimer({ createdAt, onExpired }) {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!createdAt) return;
+      const createdTime = new Date(createdAt).getTime();
+      const expireTime = createdTime + 15 * 60 * 1000; // 15 minutes
+      const diff = expireTime - Date.now();
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setIsExpired(true);
+        if (onExpired) onExpired();
+      } else {
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        setIsExpired(false);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.74rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isExpired ? '#ef4444' : '#f59e0b',
+        background: isExpired ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+        border: isExpired ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(245, 158, 11, 0.35)',
+        padding: '0.25rem 0.55rem',
+        borderRadius: '6px'
+      }}
+    >
+      <Clock size={12} />
+      {isExpired ? 'Auto-cancelled (Expired)' : `Will be cancelled in ${timeLeft}`}
+    </span>
+  );
+}
 
 export default function WorkerBookingDetailsModal({
   booking,
@@ -148,16 +198,23 @@ export default function WorkerBookingDetailsModal({
                   <strong style={{ fontSize: '1.2rem', color: 'var(--accent-gold)' }}>৳{currentPrice}</strong>
                 </div>
 
+                {booking.status === 'PENDING' && (
+                  <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <AutoCancelTimer createdAt={booking.createdAt} />
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-primary"
-                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.74rem' }}
+                    disabled={hasActiveJob}
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.74rem', opacity: hasActiveJob ? 0.6 : 1 }}
                     onClick={() => {
                       if (onAcceptBooking) onAcceptBooking(booking.id);
                       onClose();
                     }}
                   >
-                    <CheckCircle2 size={12} /> Accept Job (৳{currentPrice})
+                    <CheckCircle2 size={12} /> {hasActiveJob ? 'Busy on Active Job' : `Accept Job (৳${currentPrice})`}
                   </button>
                   <button
                     className="btn btn-secondary"
@@ -208,8 +265,9 @@ export default function WorkerBookingDetailsModal({
               </div>
 
               <div style={{ textAlign: 'right', fontSize: '0.74rem' }}>
-                <span style={{ color: 'var(--text-muted)', display: 'block' }}>Schedule</span>
-                <strong style={{ color: 'var(--text-heading)' }}>{booking.preferredDate || 'Tomorrow'}</strong>
+                <span style={{ color: 'var(--text-muted)', display: 'block' }}>Scheduled Slot</span>
+                <strong style={{ color: 'var(--text-heading)', display: 'block' }}>📅 {booking.preferredDate || 'Tomorrow'}</strong>
+                <span style={{ color: 'var(--primary)', fontWeight: 600 }}>⏰ {booking.preferredTime || '10:00 AM - 12:00 PM'}</span>
               </div>
             </div>
 

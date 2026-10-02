@@ -10,6 +10,55 @@ import BookingDetailsModal from './BookingDetailsModal';
 
 const API_BASE = "http://localhost:8081/api";
 
+function AutoCancelTimer({ createdAt }) {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!createdAt) return;
+      const createdTime = new Date(createdAt).getTime();
+      const expireTime = createdTime + 15 * 60 * 1000; // 15 minutes
+      const diff = expireTime - Date.now();
+
+      if (diff <= 0) {
+        setTimeLeft('00:00');
+        setIsExpired(true);
+      } else {
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        setIsExpired(false);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.72rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isExpired ? '#ef4444' : '#f59e0b',
+        background: isExpired ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+        border: isExpired ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(245, 158, 11, 0.35)',
+        padding: '0.15rem 0.45rem',
+        borderRadius: '6px'
+      }}
+    >
+      <Clock size={11} />
+      {isExpired ? 'Expired' : `Expires in ${timeLeft}`}
+    </span>
+  );
+}
+
 export default function MyBookingsHub({ currentUser, rewards, initialTab = 'overview', workers = [], savedWorkerIds = [], onToggleSaveWorker, onAddPoints, onShowToast, onNavigateToWorkerProfile }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'overview'); // 'overview', 'bookings', 'history', 'saved-technicians'
   const [bookings, setBookings] = useState([]);
@@ -755,8 +804,14 @@ export default function MyBookingsHub({ currentUser, rewards, initialTab = 'over
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.3rem', marginBottom: 0 }}>
                         Technician: <strong style={{ color: 'var(--text-heading)' }}>{b.worker?.name || 'Searching...'}</strong> •
                         Price: <strong style={{ color: 'var(--primary)' }}>৳{currentPrice}</strong> •
+                        Schedule: 📅 <strong>{b.preferredDate || 'Tomorrow'}</strong> ({b.preferredTime || '10:00 AM'}) •
                         Address: {b.address || (b.description?.match(/\[Location:\s*(.*?)\]/)?.[1]) || 'Customer Location'}
                       </p>
+                      {b.status === 'PENDING' && (
+                        <div style={{ marginTop: '0.35rem' }}>
+                          <AutoCancelTimer createdAt={b.createdAt} />
+                        </div>
+                      )}
                     </div>
 
                     {/* Action buttons on the row */}
@@ -912,6 +967,11 @@ export default function MyBookingsHub({ currentUser, rewards, initialTab = 'over
                   <div>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', display: 'block' }}>#BK-{b.id}</span>
                     <div style={{ marginTop: '0.3rem' }}>{getStatusBadge(b.status)}</div>
+                    {b.status === 'PENDING' && (
+                      <div style={{ marginTop: '0.3rem' }}>
+                        <AutoCancelTimer createdAt={b.createdAt} />
+                      </div>
+                    )}
                   </div>
 
                   {/* Column 2: Service & Problem Description */}
@@ -920,6 +980,10 @@ export default function MyBookingsHub({ currentUser, rewards, initialTab = 'over
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0', lineHeight: 1.3 }}>
                       {b.description.length > 50 ? `${b.description.slice(0, 50)}...` : b.description}
                     </p>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <Clock size={11} />
+                      <span>📅 <strong>{b.preferredDate || 'Tomorrow'}</strong> • {b.preferredTime || '10:00 AM'}</span>
+                    </div>
                     {isWorkerCounter && (
                       <div style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 'bold', marginTop: '0.3rem' }}>
                         ⚡ Technician Counter Offer: ৳{currentPrice}

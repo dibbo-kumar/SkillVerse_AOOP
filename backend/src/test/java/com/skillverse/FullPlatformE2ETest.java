@@ -271,7 +271,9 @@ public class FullPlatformE2ETest {
     @DisplayName("WORKER VERIFICATION & ADMIN DOSSIER WORKFLOW")
     void testWorkerVerificationWorkflow() throws Exception {
         // Create fresh worker
-        User testWorker = new User("Test Worker Pro", "test_worker_e2e@skillverse.com", "01799887766", "WORKER");
+        long ts = System.currentTimeMillis();
+        String testPhone = "018" + (ts % 100000000L);
+        User testWorker = new User("Test Worker Pro", "test_worker_" + ts + "@skillverse.com", testPhone, "WORKER");
         testWorker.setVerified(false);
         testWorker.setStatus("UNVERIFIED");
         User savedWorker = userRepository.save(testWorker);
@@ -279,7 +281,7 @@ public class FullPlatformE2ETest {
         // 1. Send simulated OTP
         String otpRes = mockMvc.perform(post("/api/verification/send-phone-otp")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phone\":\"01799887766\"}"))
+                        .content(String.format("{\"phone\":\"%s\"}", testPhone)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.simulatedOtp").exists())
@@ -290,7 +292,7 @@ public class FullPlatformE2ETest {
         // 2. Verify OTP
         mockMvc.perform(post("/api/verification/verify-phone-otp")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(String.format("{\"phone\":\"01799887766\",\"otp\":\"%s\"}", simulatedOtp)))
+                        .content(String.format("{\"phone\":\"%s\",\"otp\":\"%s\"}", testPhone, simulatedOtp)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.verified").value(true));
 
@@ -299,7 +301,7 @@ public class FullPlatformE2ETest {
         dto.setUserId(savedWorker.getId());
         dto.setFullName("Test Worker Pro");
         dto.setDateOfBirth("1995-05-15");
-        dto.setPhone("01799887766");
+        dto.setPhone(testPhone);
         dto.setPhoneVerified(true);
         dto.setNidNumber("8899776655");
         dto.setPresentAddress("House 5, Road 2, Mirpur 10, Dhaka");
@@ -487,5 +489,82 @@ public class FullPlatformE2ETest {
                         .content(mapper.writeValueAsString(bookingReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("CUSTOMER SCHEDULING: Slot Selection, Busy Conflict Blocking & 15-Minute Auto-Expiry")
+    void testCustomerSchedulingSlotConflictAndAutoExpiryWorkflow() throws Exception {
+        User customer = userRepository.findByEmail("anis@gmail.com").orElseThrow();
+        User worker = userRepository.findByEmail("kamrul@gmail.com").orElseThrow();
+
+        String testDate = "2026-10-15";
+        String testSlot = "10:00 AM - 12:00 PM";
+
+        // 1. Customer books worker for specific date & time slot
+        BookingRequest bookingReq1 = new BookingRequest();
+        bookingReq1.setCustomerId(customer.getId());
+        bookingReq1.setWorkerId(worker.getId());
+        bookingReq1.setServiceType("Plumbing");
+        bookingReq1.setEstimatedCost(1000.0);
+        bookingReq1.setPreferredDate(testDate);
+        bookingReq1.setPreferredTime(testSlot);
+        bookingReq1.setDescription("Kitchen pipe repair");
+        bookingReq1.setAddress("Dhanmondi 27");
+
+        String res1 = mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(bookingReq1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.preferredDate").value(testDate))
+                .andExpect(jsonPath("$.preferredTime").value(testSlot))
+                .andReturn().getResponse().getContentAsString();
+
+        Long booking1Id = mapper.readTree(res1).get("id").asLong();
+
+        // 2. Query booked slots endpoint for this worker on this date
+        mockMvc.perform(get("/api/bookings/worker/" + worker.getId() + "/booked-slots")
+                        .param("date", testDate))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0]").value(testSlot));
+
+        // 3. Another booking attempt for the SAME worker on the SAME date & slot -> MUST be blocked with 400
+        BookingRequest bookingReq2 = new BookingRequest();
+        bookingReq2.setCustomerId(customer.getId());
+        bookingReq2.setWorkerId(worker.getId());
+        bookingReq2.setServiceType("Plumbing");
+        bookingReq2.setEstimatedCost(1200.0);
+        bookingReq2.setPreferredDate(testDate);
+        bookingReq2.setPreferredTime(testSlot);
+        bookingReq2.setDescription("Bathroom leakage repair");
+        bookingReq2.setAddress("Gulshan 2");
+
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(bookingReq2)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("busy in this time slot")));
+
+        // 4. Test 15-Minute Auto-Expiry: Set createdAt to 20 minutes ago and trigger autoExpirePendingBookings
+        ServiceBooking b1 = bookingRepository.findById(booking1Id).orElseThrow();
+        b1.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(20));
+        bookingRepository.save(b1);
+
+        // Fetching customer bookings or worker bookings will trigger autoExpirePendingBookings
+        mockMvc.perform(get("/api/bookings/customer/" + customer.getId()))
+                .andExpect(status().isOk());
+
+        ServiceBooking b1Expired = bookingRepository.findById(booking1Id).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("CANCELLED", b1Expired.getStatus());
+
+        // 5. Now that the expired booking is CANCELLED, the slot becomes free again!
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(bookingReq2)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.preferredDate").value(testDate))
+                .andExpect(jsonPath("$.preferredTime").value(testSlot));
     }
 }
