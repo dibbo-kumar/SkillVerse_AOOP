@@ -316,10 +316,17 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
   const currentVerifStatus = verifDossier ? verifDossier.status : (currentWorker?.status || (currentWorker?.isVerified ? 'APPROVED' : 'UNVERIFIED'));
 
   const activeJob = workerBookings.find(b =>
-    ['CONFIRMED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(b.status) &&
-    b.status !== 'COMPLETED' && b.status !== 'PAID' && b.status !== 'CANCELLED'
+    ['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETION_REQUESTED'].includes(b.status)
+  ) || workerBookings.find(b =>
+    b.status === 'CONFIRMED' && b.advancePaid
   );
   const hasActiveJob = !!activeJob;
+
+  const pendingJobs = workerBookings.filter(b =>
+    (!activeJob || b.id !== activeJob.id) &&
+    !['COMPLETED', 'PAID', 'CANCELLED'].includes(b.status) &&
+    ['ACCEPTED', 'AWAITING_ADVANCE', 'PRICE_AGREED', 'CONFIRMED'].includes(b.status)
+  );
 
   const activeWarrantyBookings = workerBookings.filter(b =>
     b.warrantyStatus === 'WARRANTY_CLAIMED' || b.warrantyStatus === 'WARRANTY_ACCEPTED'
@@ -345,12 +352,6 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
       if (onShowToast) onShowToast("Error", "Network error accepting warranty claim.", "error");
     }
   };
-
-  useEffect(() => {
-    if (hasActiveJob && activeSubTab === 'requests') {
-      setActiveSubTab('active-job');
-    }
-  }, [hasActiveJob]);
 
   const handleOpenDetails = (b) => {
     setDetailsBooking(b);
@@ -544,19 +545,34 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
       setActiveSubTab('history');
       return;
     }
-    if (hasActiveJob) {
-      if (onShowToast) onShowToast("Worker Busy", "You already have an active job in progress. Complete your current active job before accepting new bookings.", "error");
-      return;
+
+    const targetBooking = workerBookings.find(b => b.id === bId);
+    if (targetBooking?.preferredDate && targetBooking?.preferredTime) {
+      const isConflict = workerBookings.some(b =>
+        b.id !== bId &&
+        ['ACCEPTED', 'AWAITING_ADVANCE', 'PRICE_AGREED', 'CONFIRMED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETION_REQUESTED'].includes(b.status) &&
+        b.preferredDate?.trim().toLowerCase() === targetBooking.preferredDate?.trim().toLowerCase() &&
+        b.preferredTime?.trim().toLowerCase() === targetBooking.preferredTime?.trim().toLowerCase()
+      );
+      if (isConflict) {
+        if (onShowToast) onShowToast("Slot Conflict", `You are already booked for ${targetBooking.preferredDate} (${targetBooking.preferredTime}).`, "error");
+        return;
+      }
     }
+
     try {
       const res = await fetch(`${API_BASE}/bookings/${bId}/accept-price?acceptedBy=WORKER`, { method: 'PUT' });
       if (res.ok) {
         const data = await res.json();
         fetchWorkerData();
-        if (onShowToast) onShowToast("Booking Accepted!", `Price agreed! Awaiting customer base advance payment (BDT ${data.basePrice || 300} + 5% VAT) to activate dispatch.`, "success");
+        if (hasActiveJob) {
+          if (onShowToast) onShowToast("Booking Accepted & Queued!", `Accepted request for slot ${data.preferredDate || 'Tomorrow'} (${data.preferredTime || '10:00 AM'}). Queued under Pending Jobs while your active job continues uninterrupted.`, "success");
+        } else {
+          if (onShowToast) onShowToast("Booking Accepted!", `Price agreed! Awaiting customer base advance payment (BDT ${data.basePrice || 300} + 5% VAT) to activate dispatch.`, "success");
+        }
       } else {
         const err = await res.json();
-        if (onShowToast) onShowToast("Cannot Accept", err.error || "You already have an active job in progress or need verification.", "error");
+        if (onShowToast) onShowToast("Cannot Accept", err.error || "You have a conflict in this slot or need verification.", "error");
       }
     } catch (e) {
       console.error(e);
@@ -709,10 +725,6 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
       setActiveSubTab('history');
       return;
     }
-    if (hasActiveJob) {
-      if (onShowToast) onShowToast("Worker Busy", "You already have an active job in progress (#BK-" + activeJob?.id + "). Complete or finalize the current job before quoting on new problems.", "error");
-      return;
-    }
     if (!selectedProblem || !offerPrice) return;
     try {
       const res = await fetch(`${API_BASE}/problems/${selectedProblem.id}/offers`, {
@@ -798,8 +810,8 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
 
   const pendingRequests = workerBookings.filter(b => 
     !b.advancePaid &&
-    !['CONFIRMED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETION_REQUESTED', 'COMPLETED', 'PAID', 'CANCELLED'].includes(b.status) &&
-    ['PENDING', 'NEGOTIATING', 'AWAITING_ADVANCE', 'ACCEPTED', 'COUNTERED'].includes(b.status)
+    !['CONFIRMED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETION_REQUESTED', 'COMPLETED', 'PAID', 'CANCELLED', 'ACCEPTED', 'AWAITING_ADVANCE', 'PRICE_AGREED'].includes(b.status) &&
+    ['PENDING', 'NEGOTIATING', 'COUNTERED'].includes(b.status)
   );
   const completedBookings = workerBookings.filter(b => b.status === 'COMPLETED' || b.status === 'PAID');
   const completedReviews = workerBookings.filter(b => b.reviewRating != null);
@@ -1064,6 +1076,13 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
           ⚡ Active Job {hasActiveJob ? '🔴' : ''}
         </button>
         <button
+          onClick={() => setActiveSubTab('pending-jobs')}
+          className={`btn ${activeSubTab === 'pending-jobs' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ padding: '0.5rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center', textAlign: 'center', whiteSpace: 'normal', minHeight: '40px' }}
+        >
+          ⏳ Pending Jobs ({pendingJobs.length})
+        </button>
+        <button
           onClick={() => setActiveSubTab('requests')}
           className={`btn ${activeSubTab === 'requests' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ padding: '0.5rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center', textAlign: 'center', whiteSpace: 'normal', minHeight: '40px' }}
@@ -1296,6 +1315,173 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
       )}
 
       {/* ============================================================ */}
+      {/* --- SUBTAB: PENDING / QUEUED JOBS --- */}
+      {/* ============================================================ */}
+      {activeSubTab === 'pending-jobs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                ⏳ Pending & Scheduled Job Slots ({pendingJobs.length})
+              </h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                Bookings accepted for future free slots. These will activate for dispatch without interrupting your active in-progress job.
+              </p>
+            </div>
+            {hasActiveJob && (
+              <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.35)', padding: '0.45rem 0.9rem', borderRadius: '10px', fontSize: '0.8rem', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Activity size={14} className="animate-spin" /> Active Job in progress (#BK-{activeJob.id}) — queued jobs are safe and scheduled
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {pendingJobs.map((b) => {
+              const isAdvancePaid = b.advancePaid || b.status === 'CONFIRMED';
+              const isAwaitingAdvance = b.status === 'AWAITING_ADVANCE' || (b.status === 'ACCEPTED' && !b.advancePaid);
+              const currentPrice = b.agreedCost || b.estimatedCost || b.workerCounterPrice || b.customerOfferPrice || 500;
+              const netEarning = b.workerNetEarning || Math.round(currentPrice * 0.95);
+
+              return (
+                <div
+                  key={b.id}
+                  className="glass-card"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.2fr 2.2fr 1.6fr 1.2fr 1.6fr',
+                    alignItems: 'center',
+                    gap: '1.2rem',
+                    padding: '1.3rem 1.4rem',
+                    borderRadius: '16px',
+                    border: isAdvancePaid
+                      ? '1.5px solid rgba(16, 185, 129, 0.4)'
+                      : '1.5px solid rgba(245, 158, 11, 0.4)',
+                    background: isAdvancePaid
+                      ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(6, 78, 59, 0.08))'
+                      : 'linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(120, 53, 15, 0.08))'
+                  }}
+                >
+                  {/* Column 1: ID & Status */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>#BK-{b.id}</span>
+                      {isAdvancePaid ? (
+                        <span className="badge badge-verified" style={{ fontSize: '0.7rem' }}>Confirmed</span>
+                      ) : (
+                        <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.35)', fontSize: '0.7rem' }}>
+                          Awaiting Advance
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'block', marginTop: '0.35rem' }}>
+                      Source: {b.bookingSource || 'DIRECT'}
+                    </span>
+                  </div>
+
+                  {/* Column 2: Service & Problem */}
+                  <div>
+                    <strong style={{ fontSize: '1rem', color: 'var(--text-heading)', display: 'block' }}>{b.serviceType}</strong>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0', lineHeight: 1.35 }}>
+                      {b.description?.length > 70 ? `${b.description.slice(0, 70)}...` : (b.description || 'Standard technical service')}
+                    </p>
+                    {b.beforePhoto && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.3rem', background: 'rgba(59, 130, 246, 0.1)', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                        <Camera size={11} color="#60a5fa" />
+                        <span style={{ fontSize: '0.7rem', color: '#93c5fd' }}>Problem Photo Attached</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 3: Customer & Scheduled Slot */}
+                  <div>
+                    <strong style={{ fontSize: '0.86rem', color: 'var(--text-heading)', display: 'block' }}>{b.customer?.name || 'Customer'}</strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>
+                      📍 {b.address || (b.description?.match(/\[Location:\s*(.*?)\]/)?.[1]) || b.customer?.address || 'Customer Location'}
+                    </span>
+                    <div style={{ marginTop: '0.35rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.35)', color: '#93c5fd', padding: '0.25rem 0.55rem', borderRadius: '6px', fontSize: '0.76rem', fontWeight: 600 }}>
+                      <Calendar size={12} />
+                      <span>{b.preferredDate || 'Tomorrow'} • {b.preferredTime || '10:00 AM'}</span>
+                    </div>
+                  </div>
+
+                  {/* Column 4: Price & Net Earnings */}
+                  <div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Agreed Deal Price</span>
+                    <strong style={{ fontSize: '1.15rem', color: 'var(--primary)' }}>৳{currentPrice}</strong>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--accent-gold)', display: 'block', marginTop: '0.1rem' }}>
+                      Net: ৳{netEarning} (95%)
+                    </span>
+                  </div>
+
+                  {/* Column 5: Action Controls */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+                    {isAdvancePaid ? (
+                      !hasActiveJob ? (
+                        <button
+                          className="btn btn-primary"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem', width: '100%', justifyContent: 'center' }}
+                          onClick={() => {
+                            handleSetOnTheWay(b.id);
+                            setActiveSubTab('active-job');
+                          }}
+                        >
+                          🚀 Start Journey
+                        </button>
+                      ) : (
+                        <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.73rem', textAlign: 'center', width: '100%' }}>
+                          ✔ Queued for Slot
+                        </span>
+                      )
+                    ) : (
+                      <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.73rem', textAlign: 'center', width: '100%' }}>
+                        ⏳ Awaiting Customer Adv. (৳{b.basePrice || 300})
+                      </span>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.35rem', width: '100%', justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', flex: 1, justifyContent: 'center' }}
+                        onClick={() => handleOpenDetails(b)}
+                      >
+                        <Eye size={13} /> Details
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.35rem 0.55rem', fontSize: '0.75rem', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                        onClick={() => handleDeclineBooking(b.id)}
+                        title="Cancel this slot"
+                      >
+                        <XCircle size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {pendingJobs.length === 0 && (
+              <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem 2rem', color: 'var(--text-muted)' }}>
+                <Calendar size={48} style={{ margin: '0 auto 0.8rem auto', opacity: 0.35 }} />
+                <h4 style={{ fontSize: '1.15rem', color: 'var(--text-heading)', margin: 0 }}>No Pending or Scheduled Jobs</h4>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.3rem', maxWidth: '500px', margin: '0.3rem auto 1.2rem auto' }}>
+                  When you accept direct booking requests or win quotes for upcoming time slots, they will appear here and wait for their scheduled appointment time without interrupting your active job.
+                </p>
+                <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center' }}>
+                  <button className="btn btn-primary" onClick={() => setActiveSubTab('requests')}>
+                    📥 Incoming Requests ({pendingRequests.length})
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setActiveSubTab('problems')}>
+                    📢 Problem Posts ({problemPosts.length})
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/* --- SUBTAB 2: DIRECT SERVICE REQUESTS --- */}
       {/* ============================================================ */}
       {activeSubTab === 'requests' && (
@@ -1379,23 +1565,19 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                       <>
                         <button
                           className="btn btn-primary"
-                          disabled={!isWorkerApproved || hasActiveJob}
+                          disabled={!isWorkerApproved}
                           style={{
                             padding: '0.35rem 0.65rem',
                             fontSize: '0.75rem',
-                            opacity: (!isWorkerApproved || hasActiveJob) ? 0.6 : 1,
-                            cursor: (!isWorkerApproved || hasActiveJob) ? 'not-allowed' : 'pointer'
+                            opacity: !isWorkerApproved ? 0.6 : 1,
+                            cursor: !isWorkerApproved ? 'not-allowed' : 'pointer'
                           }}
                           onClick={() => {
-                            if (hasActiveJob) {
-                              if (onShowToast) onShowToast("Worker Busy", "You already have an active job in progress (#BK-" + activeJob?.id + "). Complete it before accepting new requests.", "error");
-                              return;
-                            }
                             handleAcceptBooking(b.id);
                           }}
-                          title={hasActiveJob ? 'Busy: active job in progress' : !isWorkerApproved ? 'Verification approval required' : 'Accept offered price'}
+                          title={!isWorkerApproved ? 'Verification approval required' : 'Accept offered price'}
                         >
-                          <CheckCircle2 size={13} /> {hasActiveJob ? 'Busy 🔴' : 'Accept'} {!isWorkerApproved && '🔒'}
+                          <CheckCircle2 size={13} /> Accept {!isWorkerApproved && '🔒'}
                         </button>
                         <button
                           className="btn btn-secondary"
@@ -1546,22 +1728,18 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
 
                   <button
                     className="btn btn-primary"
-                    disabled={!isWorkerApproved || hasActiveJob}
+                    disabled={!isWorkerApproved}
                     style={{
                       padding: '0.65rem',
                       fontSize: '0.85rem',
                       justifyContent: 'center',
-                      opacity: (!isWorkerApproved || hasActiveJob) ? 0.6 : 1,
-                      cursor: hasActiveJob ? 'not-allowed' : 'pointer'
+                      opacity: !isWorkerApproved ? 0.6 : 1,
+                      cursor: !isWorkerApproved ? 'not-allowed' : 'pointer'
                     }}
                     onClick={() => {
                       if (!isWorkerApproved) {
                         if (onShowToast) onShowToast("Verification Required", "You must be approved to submit problem quotes.", "warning");
                         setShowVerifModal(true);
-                        return;
-                      }
-                      if (hasActiveJob) {
-                        if (onShowToast) onShowToast("Worker Busy", "You already have an active job in progress (#BK-" + activeJob?.id + "). Complete or finalize your current job before quoting on other problems.", "error");
                         return;
                       }
                       setSelectedProblem(p);
@@ -1570,7 +1748,7 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                       setShowProblemOfferModal(true);
                     }}
                   >
-                    <Send size={14} /> {hasActiveJob ? '🔴 Busy on Active Job' : !isWorkerApproved ? 'Submit Quote (🔒 Approval Required)' : myOffer ? 'Update Quote ৳' : 'Submit Price Quote →'}
+                    <Send size={14} /> {!isWorkerApproved ? 'Submit Quote (🔒 Approval Required)' : myOffer ? 'Update Quote ৳' : 'Submit Price Quote →'}
                   </button>
                 </div>
               );

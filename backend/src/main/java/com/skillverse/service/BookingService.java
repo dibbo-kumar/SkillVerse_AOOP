@@ -115,6 +115,20 @@ public class BookingService {
                         && activeStatuses.contains(b.getStatus()));
     }
 
+    public boolean isSlotConflict(Long workerId, String date, String timeSlot, Long excludeBookingId) {
+        if (workerId == null || date == null || timeSlot == null || date.trim().isEmpty() || timeSlot.trim().isEmpty()) {
+            return false;
+        }
+        String targetDate = date.trim();
+        String targetSlot = timeSlot.trim();
+        List<String> blockingStatuses = List.of("ACCEPTED", "AWAITING_ADVANCE", "PRICE_AGREED", "CONFIRMED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS", "COMPLETION_REQUESTED");
+        return bookingRepository.findByWorkerId(workerId).stream()
+                .anyMatch(b -> (excludeBookingId == null || !b.getId().equals(excludeBookingId))
+                        && blockingStatuses.contains(b.getStatus())
+                        && targetDate.equalsIgnoreCase(b.getPreferredDate() != null ? b.getPreferredDate().trim() : "")
+                        && targetSlot.equalsIgnoreCase(b.getPreferredTime() != null ? b.getPreferredTime().trim() : ""));
+    }
+
     public boolean hasActiveWarrantyClaim(Long workerId) {
         if (workerId == null) return false;
         List<ServiceBooking> workerBookings = bookingRepository.findByWorkerId(workerId);
@@ -259,8 +273,8 @@ public class BookingService {
                 worker.setStatus("ACTIVE");
                 userRepository.save(worker);
             }
-            if (isWorkerBusy(worker.getId(), booking.getId())) {
-                throw new IllegalStateException("Worker already has an active job in progress. Complete or finalize the current job before accepting another.");
+            if (isSlotConflict(worker.getId(), booking.getPreferredDate(), booking.getPreferredTime(), booking.getId())) {
+                throw new IllegalStateException("Worker is already booked for another job in this time slot (" + booking.getPreferredDate() + " " + booking.getPreferredTime() + ").");
             }
         }
 

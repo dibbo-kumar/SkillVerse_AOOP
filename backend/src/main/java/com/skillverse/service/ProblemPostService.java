@@ -207,9 +207,16 @@ public class ProblemPostService {
 
         List<String> activeStatuses = List.of("CONFIRMED", "ON_THE_WAY", "ARRIVED", "IN_PROGRESS", "COMPLETION_REQUESTED");
         List<ServiceBooking> workerBookings = bookingRepository.findByWorkerId(worker.getId());
-        boolean isBusy = workerBookings.stream().anyMatch(b -> activeStatuses.contains(b.getStatus()));
-        if (isBusy) {
-            throw new IllegalStateException("This technician currently has an active job in progress and cannot accept new jobs at this time.");
+        if (post.getPreferredDate() != null && post.getPreferredTime() != null) {
+            String targetDate = post.getPreferredDate().trim();
+            String targetSlot = post.getPreferredTime().trim();
+            boolean isSlotTaken = workerBookings.stream().anyMatch(b ->
+                    activeStatuses.contains(b.getStatus())
+                    && targetDate.equalsIgnoreCase(b.getPreferredDate() != null ? b.getPreferredDate().trim() : "")
+                    && targetSlot.equalsIgnoreCase(b.getPreferredTime() != null ? b.getPreferredTime().trim() : ""));
+            if (isSlotTaken) {
+                throw new IllegalStateException("This technician is already booked for this time slot (" + post.getPreferredDate() + " " + post.getPreferredTime() + ").");
+            }
         }
 
         acceptedOffer.setStatus("ACCEPTED");

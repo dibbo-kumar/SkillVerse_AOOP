@@ -207,14 +207,13 @@ export default function WorkerBookingDetailsModal({
                 <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-primary"
-                    disabled={hasActiveJob}
-                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.74rem', opacity: hasActiveJob ? 0.6 : 1 }}
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.74rem' }}
                     onClick={() => {
                       if (onAcceptBooking) onAcceptBooking(booking.id);
                       onClose();
                     }}
                   >
-                    <CheckCircle2 size={12} /> {hasActiveJob ? 'Busy on Active Job' : `Accept Job (৳${currentPrice})`}
+                    <CheckCircle2 size={12} /> Accept Job (৳{currentPrice})
                   </button>
                   <button
                     className="btn btn-secondary"
