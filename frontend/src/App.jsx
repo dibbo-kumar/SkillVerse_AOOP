@@ -35,7 +35,8 @@ import {
   Camera,
   Sun,
   Moon,
-  Palette
+  Palette,
+  Star
 } from 'lucide-react';
 import CustomerProfileHub from './components/customer/CustomerProfileHub';
 import CustomerSettings from './components/customer/CustomerSettings';
@@ -51,6 +52,7 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import NotificationBell from './components/notifications/NotificationBell';
 import PostedProblemsHub from './components/bookings/PostedProblemsHub';
 import LandingPage from './components/landing/LandingPage';
+import { AVAILABLE_SKILLS_LIST } from './data/bangladeshGeoData';
 
 const API_BASE = "http://localhost:8081/api";
 
@@ -1051,32 +1053,61 @@ function App() {
     setToastPopup({ title, message, type, onDone });
   };
 
-  // GPS Location Fetcher
+  // GPS Location Fetcher for Customer Service Location
   const handleFetchGpsLocation = () => {
     setIsGpsLoading(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude.toFixed(4);
-          const lon = pos.coords.longitude.toFixed(4);
-          setBookingAddress(`GPS Location (${lat}, ${lon}) - Sector 12, Uttara, Dhaka`);
+        async (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(5));
+          const lon = Number(pos.coords.longitude.toFixed(5));
+          let resolvedAddr = `GPS Location (${lat}, ${lon}) - Uttara, Dhaka`;
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=16`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.display_name) {
+                resolvedAddr = data.display_name.split(',').slice(0, 4).join(', ');
+              }
+            }
+          } catch (ignored) {}
+
+          setCustomerLocation(prev => ({ ...prev, lat, lon, address: resolvedAddr }));
+          setBookingAddress(resolvedAddr);
           setIsGpsLoading(false);
+          showToast("Service Location Updated", `📍 Location set to: ${resolvedAddr}`, "success");
         },
-        () => {
-          setBookingAddress('House 14, Road 4, Sector 12, Uttara, Dhaka (GPS Shared)');
+        (err) => {
+          console.warn("GPS Geolocation Error:", err);
+          const fallback = currentUser?.address || customerLocation?.address || 'House 14, Road 4, Sector 12, Uttara, Dhaka';
+          setBookingAddress(fallback);
           setIsGpsLoading(false);
-        }
+          showToast("Location Detected", `📍 Using profile address: ${fallback}`, "info");
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
       );
     } else {
-      setBookingAddress('House 14, Road 4, Sector 12, Uttara, Dhaka');
+      const fallback = currentUser?.address || customerLocation?.address || 'House 14, Road 4, Sector 12, Uttara, Dhaka';
+      setBookingAddress(fallback);
       setIsGpsLoading(false);
+      showToast("Location Set", `📍 ${fallback}`, "info");
     }
   };
 
-  // Technician Search & Radius Filter States
+  // Technician Search, Category, Radius, Rating & Experience Filter States
   const [skillSearchQuery, setSkillSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedRadius, setSelectedRadius] = useState(999); // km (999 = All Areas)
+  const [selectedRatingFilter, setSelectedRatingFilter] = useState('all'); // 'all', 'high-to-low', 'top', 'high', 'average', 'low-to-high'
+  const [selectedExpYears, setSelectedExpYears] = useState(0); // 0 = Any Experience
+  const [technicianDisplayLimit, setTechnicianDisplayLimit] = useState(6); // Max 2 rows by default
+  const [showTechnicianMap, setShowTechnicianMap] = useState(false); // Hidden by default; toggled via button
+
+  // Reset display limit when filter criteria changes
+  useEffect(() => {
+    setTechnicianDisplayLimit(6);
+  }, [skillSearchQuery, selectedCategory, selectedRadius, selectedRatingFilter, selectedExpYears]);
+
   const RADIUS_OPTIONS = [
     { label: '500m', value: 0.5 },
     { label: '1 km', value: 1 },
@@ -1844,7 +1875,8 @@ function App() {
       setBookingAddress(options.propertyAddress);
     } else {
       const defaultAddr = addresses.find(a => a.isDefault);
-      setBookingAddress(defaultAddr ? (defaultAddr.address || defaultAddr.fullAddress || '') : (addresses[0]?.address || addresses[0]?.fullAddress || 'Uttara Sector 12, Dhaka'));
+      const activeCustAddr = customerLocation?.address || currentUser?.address || (defaultAddr ? (defaultAddr.address || defaultAddr.fullAddress) : 'Sector 12, Uttara, Dhaka');
+      setBookingAddress(activeCustAddr);
     }
   };
 
@@ -1870,6 +1902,7 @@ function App() {
           estimatedCost: finalPrice,
           basePrice: workerBasePrice,
           beforePhoto: photoToSend,
+          address: chosenAddress,
           description: `${bookingDesc || "Standard service request."} [Location: ${chosenAddress}]`
         })
       });
@@ -2644,20 +2677,20 @@ function App() {
       {isLoggedIn && activeTab === 'customer' && currentUser.role === 'CUSTOMER' && (
         <div>
           {/* Smart AI Diagnostic Assistant Hub */}
-          <div className="glass-card" style={{ margin: '1.5rem 2rem', padding: '1.75rem', borderRadius: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)' }}>
+          <div className="glass-card" style={{ margin: '1.5rem 2rem', padding: '1.5rem 1.75rem', borderRadius: '14px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.2rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                <div style={{ width: 42, height: 42, borderRadius: '12px', background: 'var(--primary-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Sparkles size={22} color="var(--primary)" />
+                <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'var(--primary-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={20} color="var(--primary)" />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-heading)' }}>
+                  <h2 style={{ fontSize: '1.2rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-heading)' }}>
                     Smart AI Diagnostic Assistant
-                    <span style={{ fontSize: '0.72rem', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)', padding: '0.2rem 0.6rem', borderRadius: '20px', fontWeight: 'bold' }}>
+                    <span className="badge badge-verified" style={{ fontSize: '0.72rem', padding: '0.15rem 0.55rem', borderRadius: '20px' }}>
                       🟢 Online 24/7
                     </span>
                   </h2>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', margin: '0.15rem 0 0 0' }}>
                     Describe any household breakdown or service question for instant AI troubleshooting, safety advice, and cost guidance.
                   </p>
                 </div>
@@ -2674,8 +2707,8 @@ function App() {
             </div>
 
             {/* Quick Diagnostic Suggestion Chips */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', alignSelf: 'center', marginRight: '0.2rem' }}>
+            <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', alignSelf: 'center', marginRight: '0.2rem' }}>
                 Quick Diagnostics:
               </span>
               {[
@@ -2706,15 +2739,15 @@ function App() {
                     }
                   }}
                   style={{
-                    background: 'var(--bg-card-hover)',
+                    background: 'var(--bg-secondary)',
                     border: '1px solid var(--border-color)',
-                    color: 'var(--text-primary)',
+                    color: 'var(--text-heading)',
                     borderRadius: '20px',
-                    padding: '0.35rem 0.75rem',
-                    fontSize: '0.78rem',
+                    padding: '0.3rem 0.7rem',
+                    fontSize: '0.76rem',
                     cursor: 'pointer',
-                    fontWeight: 600,
-                    transition: 'all 0.2s ease'
+                    fontWeight: 500,
+                    transition: 'all 0.15s ease'
                   }}
                 >
                   {chip.label}
@@ -2745,7 +2778,7 @@ function App() {
                     color: m.sender === 'user' ? '#ffffff' : 'var(--text-primary)',
                     border: m.sender === 'user' ? 'none' : '1px solid var(--border-color)',
                     padding: '0.75rem 1rem',
-                    borderRadius: m.sender === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
+                    borderRadius: m.sender === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                     maxWidth: '85%',
                     fontSize: '0.88rem',
                     lineHeight: 1.6,
@@ -2762,36 +2795,36 @@ function App() {
             <div style={{ display: 'flex', gap: '0.6rem' }}>
               <input
                 className="form-input"
-                style={{ padding: '0.75rem 1rem', fontSize: '0.9rem', borderRadius: '10px' }}
+                style={{ padding: '0.65rem 0.95rem', fontSize: '0.88rem', borderRadius: '8px' }}
                 placeholder="Ask Smart AI Assistant anything about your repair, maintenance, or pricing..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               />
-              <button className="btn btn-primary" style={{ padding: '0.75rem 1.4rem', borderRadius: '10px', fontWeight: 700 }} onClick={handleSendMessage}>
-                <span>Send</span> <ArrowRight size={16} />
+              <button className="btn btn-primary" style={{ padding: '0.65rem 1.3rem', borderRadius: '8px', fontWeight: 600 }} onClick={handleSendMessage}>
+                <span>Send</span> <ArrowRight size={15} />
               </button>
             </div>
           </div>
 
           {/* Post Your Problem Entry Point */}
           <div style={{ padding: '0 2rem', marginBottom: '1.5rem' }}>
-            <div className="glass-card" style={{ background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(79, 70, 229, 0.08))', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '1.25rem 1.5rem' }}>
+            <div className="glass-card" style={{ background: 'var(--primary-subtle)', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '1.25rem 1.5rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', margin: '0 0 0.3rem 0', color: 'var(--text-heading)', fontWeight: 'bold' }}>Can't find the right technician?</h3>
+                <h3 style={{ fontSize: '1.15rem', margin: '0 0 0.3rem 0', color: 'var(--text-heading)', fontWeight: 'bold' }}>Can't find the right technician?</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>Post your maintenance problem publicly with preferred date & budget. Technicians will respond with custom offers!</p>
               </div>
               <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-secondary"
-                  style={{ padding: '0.7rem 1.2rem', fontWeight: 'bold', fontSize: '0.9rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}
+                  style={{ padding: '0.55rem 1.1rem', fontWeight: '600', fontSize: '0.88rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}
                   onClick={() => setShowPostedProblemsModal(true)}
                 >
                   📋 Your Posted Problems
                 </button>
                 <button
                   className="btn btn-primary"
-                  style={{ padding: '0.7rem 1.4rem', fontWeight: 'bold', fontSize: '0.9rem' }}
+                  style={{ padding: '0.55rem 1.2rem', fontWeight: '600', fontSize: '0.88rem' }}
                   onClick={() => setShowPostProblemModal(true)}
                 >
                   📢 Post Your Problem Now
@@ -2841,176 +2874,408 @@ function App() {
               </div>
             </div>
 
-            {/* Category Chips */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-              {CATEGORY_CHIPS.map(cat => (
-                <button
-                  key={cat}
-                  className={`btn ${selectedCategory === cat ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', borderRadius: '20px' }}
-                  onClick={() => setSelectedCategory(cat)}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            {/* Multi-Filter Toolbar: Skill, Distance, Rating, and Experience Years Dropdowns */}
+            {(() => {
+              const allUniqueSkills = Array.from(new Set([
+                ...(AVAILABLE_SKILLS_LIST || []),
+                ...(workers || []).flatMap(w => (w.skills || '').split(',').map(s => s.replace(/\(.*?\)/g, '').trim()))
+              ])).filter(Boolean);
 
-            {/* Radius Filter */}
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <MapPin size={14} color="var(--primary)" /> Search Radius:
-              </span>
-              {RADIUS_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`btn ${selectedRadius === opt.value ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.25rem 0.7rem', fontSize: '0.75rem', borderRadius: '16px' }}
-                  onClick={() => setSelectedRadius(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+              const hasActiveFilters = selectedCategory !== 'All' || selectedRadius < 900 || selectedRatingFilter !== 'all' || selectedExpYears > 0 || skillSearchQuery.trim();
+
+              return (
+                <div style={{ marginBottom: '1.4rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
+                    
+                    {/* 1. Skill / Category Dropdown */}
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-heading)' }}>
+                        <Briefcase size={14} color="var(--primary)" /> Trade / Skill:
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '0.86rem', padding: '0.55rem 0.75rem', borderRadius: '10px' }}
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                      >
+                        <option value="All">All Skills & Trades ({allUniqueSkills.length})</option>
+                        {allUniqueSkills.map(cat => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 2. Distance / Radius Dropdown */}
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-heading)' }}>
+                        <MapPin size={14} color="#38bdf8" /> Distance / Radius:
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '0.86rem', padding: '0.55rem 0.75rem', borderRadius: '10px' }}
+                        value={selectedRadius}
+                        onChange={(e) => setSelectedRadius(Number(e.target.value))}
+                      >
+                        <option value={999}>All Areas (Any Distance)</option>
+                        <option value={0.5}>Within 500 Meters</option>
+                        <option value={1}>Within 1 km</option>
+                        <option value={3}>Within 3 km</option>
+                        <option value={5}>Within 5 km</option>
+                        <option value={10}>Within 10 km</option>
+                        <option value={20}>Within 20 km</option>
+                      </select>
+                    </div>
+
+                    {/* 3. Rating Dropdown */}
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-heading)' }}>
+                        <Star size={14} color="var(--accent-gold)" fill="var(--accent-gold)" /> Rating:
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '0.86rem', padding: '0.55rem 0.75rem', borderRadius: '10px' }}
+                        value={selectedRatingFilter}
+                        onChange={(e) => setSelectedRatingFilter(e.target.value)}
+                      >
+                        <option value="all">All Ratings (Any Star)</option>
+                        <option value="high-to-low">Highest Rated First (5★ → 1★)</option>
+                        <option value="top">Top Rated (4.8★ & Above)</option>
+                        <option value="high">High Rated (4.5★ & Above)</option>
+                        <option value="average">Average Rated (4.0★ & Above)</option>
+                        <option value="low-to-high">Lowest Rated First (1★ → 5★)</option>
+                      </select>
+                    </div>
+
+                    {/* 4. Years of Experience Dropdown */}
+                    <div>
+                      <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-heading)' }}>
+                        <Award size={14} color="var(--accent-emerald)" /> Years of Experience:
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '0.86rem', padding: '0.55rem 0.75rem', borderRadius: '10px' }}
+                        value={selectedExpYears}
+                        onChange={(e) => setSelectedExpYears(Number(e.target.value) || 0)}
+                      >
+                        <option value={0}>Any Experience Level</option>
+                        <option value={1}>1+ Year Experience</option>
+                        <option value={2}>2+ Years Experience</option>
+                        <option value={3}>3+ Years (Proficient)</option>
+                        <option value={5}>5+ Years (Senior Pro)</option>
+                        <option value={8}>8+ Years (Master)</option>
+                        <option value={10}>10+ Years (Veteran)</option>
+                      </select>
+                    </div>
+
+                  </div>
+
+                  {/* Reset Filters Quick Button */}
+                  {hasActiveFilters && (
+                    <div style={{ marginTop: '0.65rem', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.78rem', borderRadius: '16px', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                        onClick={() => {
+                          setSelectedCategory('All');
+                          setSelectedRadius(999);
+                          setSelectedRatingFilter('all');
+                          setSelectedExpYears(0);
+                          setSkillSearchQuery('');
+                        }}
+                      >
+                        ✕ Reset All Filters
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Interactive Technician Map */}
             {(() => {
-              const filteredSearchWorkers = workers
-                .filter(w => w.user?.verified)
+              const filteredSearchWorkers = (workers || [])
+                .filter(w => !w.user || w.user.verified || w.user.isVerified || w.user.status === 'ACTIVE' || w.available !== false)
                 .filter(w => {
+                  const workerSkillsStr = (w.skills || '').toLowerCase();
+
                   // Skill / keyword search filter
                   if (skillSearchQuery.trim()) {
                     const q = skillSearchQuery.toLowerCase();
-                    const skillMatch = (w.skills || '').toLowerCase().includes(q);
+                    const skillMatch = workerSkillsStr.includes(q);
                     const nameMatch = (w.user?.name || '').toLowerCase().includes(q);
                     const areaMatch = (w.serviceArea || '').toLowerCase().includes(q);
                     if (!skillMatch && !nameMatch && !areaMatch) return false;
                   }
-                  // Category chip filter
-                  if (selectedCategory !== 'All') {
-                    const catLower = selectedCategory.toLowerCase();
-                    if (catLower.includes('ac')) {
-                      const hasAc = (w.skills || '').toLowerCase().includes('ac') || (w.skills || '').toLowerCase().includes('hvac');
-                      if (!hasAc) return false;
-                    } else if (catLower.includes('plumb')) {
-                      if (!(w.skills || '').toLowerCase().includes('plumb')) return false;
-                    } else if (catLower.includes('electr')) {
-                      if (!(w.skills || '').toLowerCase().includes('electr')) return false;
-                    } else if (catLower.includes('paint')) {
-                      if (!(w.skills || '').toLowerCase().includes('paint')) return false;
-                    } else {
-                      if (!(w.skills || '').toLowerCase().includes(catLower)) return false;
+
+                  // Category dropdown filter (Matches any of worker's skills)
+                  if (selectedCategory && selectedCategory !== 'All') {
+                    const catLower = selectedCategory.toLowerCase().trim();
+                    let matches = workerSkillsStr.includes(catLower);
+
+                    if (!matches) {
+                      const tokens = catLower.split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !['and', 'repair', 'servicing', 'fitting', 'systems'].includes(t));
+                      for (const token of tokens) {
+                        if (workerSkillsStr.includes(token)) {
+                          matches = true;
+                          break;
+                        }
+                      }
+                    }
+
+                    if (!matches) {
+                      if (catLower.includes('ac') && (workerSkillsStr.includes('ac') || workerSkillsStr.includes('hvac'))) matches = true;
+                      else if (catLower.includes('plumb') && workerSkillsStr.includes('plumb')) matches = true;
+                      else if (catLower.includes('electr') && workerSkillsStr.includes('electr')) matches = true;
+                      else if (catLower.includes('paint') && workerSkillsStr.includes('paint')) matches = true;
+                      else if (catLower.includes('carpenter') && (workerSkillsStr.includes('carpenter') || workerSkillsStr.includes('wood'))) matches = true;
+                      else if (catLower.includes('cctv') && (workerSkillsStr.includes('cctv') || workerSkillsStr.includes('security'))) matches = true;
+                    }
+
+                    if (!matches) return false;
+                  }
+
+                  // 3. Minimum Experience Years Filter
+                  if (selectedExpYears > 0) {
+                    const workerExp = w.experienceYears || 0;
+                    if (workerExp < selectedExpYears) {
+                      const skillExpMatches = workerSkillsStr.matchAll(/\((\d+)\s*(?:yrs|years|yr)?\)/g);
+                      let hasQualifiedSkill = false;
+                      for (const sem of skillExpMatches) {
+                        if (parseInt(sem[1], 10) >= selectedExpYears) {
+                          hasQualifiedSkill = true;
+                          break;
+                        }
+                      }
+                      if (!hasQualifiedSkill) return false;
                     }
                   }
+
+                  // 4. Rating Threshold Filter
+                  if (selectedRatingFilter === 'top' || selectedRatingFilter === 'high' || selectedRatingFilter === 'average') {
+                    const r = Number(w.user?.rating || 4.8);
+                    if (selectedRatingFilter === 'top' && r < 4.8) return false;
+                    if (selectedRatingFilter === 'high' && r < 4.5) return false;
+                    if (selectedRatingFilter === 'average' && r < 4.0) return false;
+                  }
+
                   return true;
+                })
+                .sort((a, b) => {
+                  const ratingA = Number(a.user?.rating || 4.8);
+                  const ratingB = Number(b.user?.rating || 4.8);
+                  if (selectedRatingFilter === 'high-to-low' || selectedRatingFilter === 'top' || selectedRatingFilter === 'high') {
+                    return ratingB - ratingA;
+                  }
+                  if (selectedRatingFilter === 'low-to-high') {
+                    return ratingA - ratingB;
+                  }
+                  return 0;
                 });
 
               return (
                 <>
-                  <TechnicianMap
-                    customerLocation={customerLocation}
-                    workers={filteredSearchWorkers}
-                    selectedRadiusKm={selectedRadius}
-                    onSelectWorker={(w) => {
-                      handleOpenBookingModalWithOptions({
-                        worker: w,
-                        serviceType: w.skills.split(',')[0],
-                        suggestedCost: (w.basePrice || 300) * 2
-                      });
-                    }}
-                  />
+                  {/* Filtered Technician Matching Results Header & Map Toggle Button */}
+                  {(() => {
+                    const matchingWorkers = filteredSearchWorkers.filter(w => {
+                      // Radius filter (Haversine)
+                      if (selectedRadius < 900) {
+                        const dist = w.distanceKm != null ? w.distanceKm : calculateDistanceKm(customerLocation.lat, customerLocation.lon, w.latitude || 23.8720, w.longitude || 90.3810);
+                        if (dist > selectedRadius) return false;
+                      }
+                      return true;
+                    });
 
-                  {/* Filtered Technician Cards */}
-                  <div className="dashboard-grid" style={{ padding: 0, marginBottom: '3rem' }}>
-                    {filteredSearchWorkers
-                      .filter(w => {
-                        // Radius filter (Haversine)
-                        if (selectedRadius < 900) {
-                          const dist = w.distanceKm != null ? w.distanceKm : calculateDistanceKm(customerLocation.lat, customerLocation.lon, w.latitude || 23.8720, w.longitude || 90.3810);
-                          if (dist > selectedRadius) return false;
-                        }
-                        return true;
-                      })
-                      .map(w => {
-                        const isSaved = (savedWorkerIds || []).map(Number).includes(Number(w.id));
-                        const wLat = w.latitude || w.user?.latitude || 23.8720;
-                        const wLon = w.longitude || w.user?.longitude || 90.3810;
-                        const distKm = w.distanceKm != null ? w.distanceKm : calculateDistanceKm(customerLocation.lat, customerLocation.lon, wLat, wLon);
-                        const distStr = w.distanceString || formatDistanceString(distKm);
+                    const displayedWorkers = matchingWorkers.slice(0, technicianDisplayLimit);
 
-                        return (
-                          <div key={w.id} className="glass-card" style={{ cursor: 'pointer' }} onClick={() => setViewingWorker(w)}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                              <div style={{ position: 'relative' }}>
-                                <img
-                                  src={w.user?.profilePicture || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=150'}
-                                  alt={w.user?.name}
-                                  style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(16,185,129,0.3)' }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <button
-                                  className="technician-card-bookmark-btn"
-                                  title={isSaved ? "Saved • Click to unsave" : "Save Technician"}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleSaveWorker(w.id);
-                                    if (!isSaved) {
-                                      showToast("Technician Saved", `⭐ ${w.user?.name || 'Technician'} added to your Saved Technicians list.`, "success");
-                                    } else {
-                                      showToast("Technician Removed", `Removed ${w.user?.name || 'Technician'} from your Saved Technicians.`, "info");
-                                    }
-                                  }}
-                                >
-                                  {isSaved ? (
-                                    <BookmarkCheck size={16} color="var(--primary)" fill="var(--primary)" />
-                                  ) : (
-                                    <Bookmark size={16} color="var(--text-muted)" />
-                                  )}
-                                </button>
-                                <span className="badge badge-verified">Verified Worker</span>
-                              </div>
-                            </div>
-                            <h3 style={{ fontSize: '1.1rem', marginBottom: '0.2rem' }}>{w.user?.name}</h3>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--accent-gold)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                              <Award size={14} />
-                              <span>Rating: {w.user?.rating || 4.8} ({w.careerLevel || 'Gold'} Rank)</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>
-                              <MapPin size={13} />
-                              <span style={{ fontWeight: 'bold' }}>{distStr}</span>
-                              <span style={{ color: 'var(--text-muted)' }}>• {w.serviceArea}</span>
-                            </div>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                              <strong>Skills:</strong> {w.skills}
+                    return (
+                      <>
+                        {/* Results Header with Map View Toggle Button */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem', marginBottom: '1.2rem', padding: '0.2rem 0' }}>
+                          <div>
+                            <h3 style={{ fontSize: '1.2rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-heading)' }}>
+                              Matched Verified Technicians
+                              <span className="badge badge-verified" style={{ fontSize: '0.78rem', padding: '0.15rem 0.5rem' }}>
+                                {matchingWorkers.length} {matchingWorkers.length === 1 ? 'Worker' : 'Workers'} Found
+                              </span>
+                            </h3>
+                            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                              Showing active pros matching your skill, distance, rating, and experience filters.
                             </p>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                              <strong>Base Price:</strong> <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>BDT {w.basePrice || 300}</span> (Fixed Base Amount)
-                            </p>
-                            <button
-                              className="btn btn-primary"
-                              style={{ width: '100%', justifyContent: 'center' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
+                          </div>
+
+                          <button
+                            type="button"
+                            className={`btn ${showTechnicianMap ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setShowTechnicianMap(prev => !prev)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.45rem',
+                              fontSize: '0.85rem',
+                              padding: '0.5rem 1rem',
+                              borderRadius: '12px',
+                              fontWeight: 600
+                            }}
+                          >
+                            <MapPin size={16} color={showTechnicianMap ? '#fff' : 'var(--primary)'} />
+                            {showTechnicianMap ? '🗺️ Hide Interactive Map' : '🗺️ Show Interactive Map'}
+                          </button>
+                        </div>
+
+                        {/* Expandable Interactive Technician Map (Only shows when user clicks button) */}
+                        {showTechnicianMap && (
+                          <div style={{ marginBottom: '1.5rem', animation: 'fadeIn 0.25s ease' }}>
+                            <TechnicianMap
+                              customerLocation={customerLocation}
+                              workers={filteredSearchWorkers}
+                              selectedRadiusKm={selectedRadius}
+                              onSelectWorker={(w) => {
                                 handleOpenBookingModalWithOptions({
                                   worker: w,
                                   serviceType: w.skills.split(',')[0],
                                   suggestedCost: (w.basePrice || 300) * 2
                                 });
                               }}
-                            >
-                              Select & Book Service
-                            </button>
+                            />
                           </div>
-                        );
-                      })}
-                    {filteredSearchWorkers.length === 0 && (
-                      <div className="glass-card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
-                        <Search size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
-                        <div>No technicians found matching "{skillSearchQuery || selectedCategory}" within {selectedRadius < 900 ? (selectedRadius < 1 ? `${selectedRadius * 1000}m` : `${selectedRadius}km`) : 'all areas'}.</div>
-                        <div style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>Try expanding your search radius or changing the skill keyword.</div>
-                      </div>
-                    )}
-                  </div>
+                        )}
+
+                        {/* Filtered Technician Cards Grid with 2-Row Maximum & Load More */}
+                        <div className="dashboard-grid" style={{ padding: 0, marginBottom: '1.5rem' }}>
+                          {displayedWorkers.map(w => {
+                            const isSaved = (savedWorkerIds || []).map(Number).includes(Number(w.id));
+                            const wLat = w.latitude || w.user?.latitude || 23.8720;
+                            const wLon = w.longitude || w.user?.longitude || 90.3810;
+                            const distKm = w.distanceKm != null ? w.distanceKm : calculateDistanceKm(customerLocation.lat, customerLocation.lon, wLat, wLon);
+                            const distStr = w.distanceString || formatDistanceString(distKm);
+
+                            return (
+                              <div key={w.id} className="glass-card" style={{ cursor: 'pointer' }} onClick={() => setViewingWorker(w)}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                                  <div style={{ position: 'relative' }}>
+                                    <img
+                                      src={w.user?.profilePicture || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=150'}
+                                      alt={w.user?.name}
+                                      style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(16,185,129,0.3)' }}
+                                    />
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <button
+                                      className="technician-card-bookmark-btn"
+                                      title={isSaved ? "Saved • Click to unsave" : "Save Technician"}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleSaveWorker(w.id);
+                                        if (!isSaved) {
+                                          showToast("Technician Saved", `⭐ ${w.user?.name || 'Technician'} added to your Saved Technicians list.`, "success");
+                                        } else {
+                                          showToast("Technician Removed", `Removed ${w.user?.name || 'Technician'} from your Saved Technicians.`, "info");
+                                        }
+                                      }}
+                                    >
+                                      {isSaved ? (
+                                        <BookmarkCheck size={16} color="var(--primary)" fill="var(--primary)" />
+                                      ) : (
+                                        <Bookmark size={16} color="var(--text-muted)" />
+                                      )}
+                                    </button>
+                                    <span className="badge badge-verified">Verified Worker</span>
+                                  </div>
+                                </div>
+                                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.2rem' }}>{w.user?.name}</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: 'var(--accent-gold)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                                  <Award size={14} />
+                                  <span>Rating: {w.user?.rating || 4.8} ({w.careerLevel || 'Gold'} Rank)</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>
+                                  <MapPin size={13} />
+                                  <span style={{ fontWeight: 'bold' }}>{distStr}</span>
+                                  <span style={{ color: 'var(--text-muted)' }}>• {w.serviceArea}</span>
+                                </div>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                                  <strong>Skills:</strong> {w.skills}
+                                </p>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                                  <strong>Base Price:</strong> <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>BDT {w.basePrice || 300}</span> (Fixed Base Amount)
+                                </p>
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ width: '100%', justifyContent: 'center' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenBookingModalWithOptions({
+                                      worker: w,
+                                      serviceType: w.skills.split(',')[0],
+                                      suggestedCost: (w.basePrice || 300) * 2
+                                    });
+                                  }}
+                                >
+                                  Select & Book Service
+                                </button>
+                              </div>
+                            );
+                          })}
+                          {matchingWorkers.length === 0 && (
+                            <div className="glass-card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
+                              <Search size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                              <div>No technicians found matching "{skillSearchQuery || selectedCategory}" within {selectedRadius < 900 ? (selectedRadius < 1 ? `${selectedRadius * 1000}m` : `${selectedRadius}km`) : 'all areas'}.</div>
+                              <div style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>Try expanding your search radius or changing the skill keyword.</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Load More Technicians Controls */}
+                        {matchingWorkers.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem', marginBottom: '3.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                              {matchingWorkers.length > technicianDisplayLimit && (
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => setTechnicianDisplayLimit(prev => prev + 6)}
+                                  style={{
+                                    padding: '0.65rem 1.6rem',
+                                    fontSize: '0.88rem',
+                                    fontWeight: 600,
+                                    borderRadius: '12px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)'
+                                  }}
+                                >
+                                  <span>Load More Technicians</span>
+                                  <span style={{ background: 'rgba(0, 0, 0, 0.25)', padding: '0.15rem 0.45rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                    +{Math.min(6, matchingWorkers.length - technicianDisplayLimit)}
+                                  </span>
+                                </button>
+                              )}
+
+                              {technicianDisplayLimit > 6 && (
+                                <button
+                                  className="btn btn-secondary"
+                                  onClick={() => setTechnicianDisplayLimit(6)}
+                                  style={{
+                                    padding: '0.65rem 1.3rem',
+                                    fontSize: '0.84rem',
+                                    borderRadius: '12px',
+                                    color: 'var(--text-secondary)'
+                                  }}
+                                >
+                                  Show Less (Top 2 Rows)
+                                </button>
+                              )}
+                            </div>
+
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              Showing {displayedWorkers.length} of {matchingWorkers.length} nearby verified technicians
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               );
             })()}
@@ -3284,103 +3549,117 @@ function App() {
 
         return (
           <div className="toast-popup-overlay" onClick={(e) => e.target.className.includes('toast-popup-overlay') && setViewingWorker(null)}>
-            <div className="worker-details-floating-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div className="worker-details-floating-card modal-content-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '860px', width: '92vw', padding: '1.4rem 1.6rem', maxHeight: '92vh', overflowY: 'auto' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.8rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
                   <img
                     src={viewingWorker.user?.profilePicture}
                     alt={viewingWorker.user?.name}
-                    style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--primary)' }}
+                    style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)' }}
                   />
                   <div>
-                    <h2 style={{ fontSize: '1.4rem', marginBottom: '0.2rem' }}>{viewingWorker.user?.name}</h2>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span className="badge badge-verified"><ShieldCheck size={13} /> NID Verified Expert</span>
-                      <span className="badge badge-gold"><Award size={13} /> {viewingWorker.careerLevel || 'Master'} Rank</span>
+                      <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>{viewingWorker.user?.name}</h2>
+                      <span className="badge badge-verified" style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem' }}><ShieldCheck size={12} /> NID Verified</span>
+                      <span className="badge badge-gold" style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem' }}><Award size={12} /> {viewingWorker.careerLevel || 'Master'} Rank</span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                      ⭐ {avgRating} Rating • {viewingWorker.experienceYears || 5}+ Years Exp • Base: ৳{wBasePrice}
                     </div>
                   </div>
                 </div>
-                <button className="btn-icon" onClick={() => setViewingWorker(null)} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '50%', padding: '0.4rem' }}>
-                  <XCircle size={22} color="var(--text-muted)" />
+                <button onClick={() => setViewingWorker(null)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '50%', padding: '0.35rem', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+                  <XCircle size={20} />
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.8rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '10px', marginBottom: '1.2rem', border: '1px solid var(--border-color)' }}>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Average Rating:</span>
-                  <div style={{ fontWeight: 'bold', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <Award size={15} /> {avgRating} / 5.0
-                  </div>
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Experience:</span>
-                  <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{viewingWorker.experienceYears || 7}+ Years</div>
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Fixed Base Price:</span>
-                  <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>BDT {wBasePrice}</div>
-                </div>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Initial Advance:</span>
-                  <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>BDT {Math.round(wBasePrice * 1.05)} (Inc. 5% VAT)</div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '1.2rem' }}>
-                <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Service Area & Location</h4>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', color: 'var(--primary)' }}>
-                  <MapPin size={16} /> <strong>{viewingWorker.serviceArea || viewingWorker.user?.address}</strong>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '1.2rem' }}>
-                <h4 style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Skills & Specialization</h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {(viewingWorker.skills || '').split(',').map((skill, sIdx) => (
-                    <span key={sIdx} className="badge badge-pending" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-                      {skill.trim()}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Dynamic Client Feedbacks & Reviews */}
-              <div style={{ marginBottom: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <h4 style={{ fontSize: '0.95rem', color: 'var(--accent-gold)', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Sparkles size={15} /> Authentic Client Reviews & Ratings</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{viewingWorkerReviews.length} Verified Review(s)</span>
-                </h4>
-
-                {loadingWorkerReviews ? (
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>Loading reviews...</div>
-                ) : viewingWorkerReviews.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
-                    {viewingWorkerReviews.map((rev, rIdx) => (
-                      <div key={rIdx} style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '6px', borderLeft: '3px solid var(--accent-gold)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-                          <strong style={{ fontSize: '0.85rem', color: 'var(--text-heading)' }}>{rev.customerName || rev.customer?.name || 'Verified Customer'}</strong>
-                          <span style={{ color: 'var(--accent-gold)', fontSize: '0.8rem', fontWeight: 'bold' }}>⭐ {rev.rating || 5}.0</span>
-                        </div>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.3rem 0', fontStyle: 'italic', lineHeight: 1.4 }}>
-                          "{rev.comment || rev.reviewComment || 'Great service!'}"
-                        </p>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          Service: {rev.serviceType || 'Maintenance'} {rev.reviewedAt ? `• ${new Date(rev.reviewedAt).toLocaleDateString()}` : ''}
-                        </div>
+              {/* 2-Column Grid */}
+              <div className="modal-two-col">
+                {/* Left Column: Stats, Location, Skills */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rating:</span>
+                      <div style={{ fontWeight: 'bold', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem' }}>
+                        <Award size={13} /> {avgRating} / 5.0
                       </div>
-                    ))}
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Experience:</span>
+                      <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.85rem' }}>{viewingWorker.experienceYears || 7}+ Years</div>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Base Price:</span>
+                      <div style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.85rem' }}>৳{wBasePrice}</div>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Initial Advance:</span>
+                      <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '0.85rem' }}>৳{Math.round(wBasePrice * 1.05)} (Inc. 5% VAT)</div>
+                    </div>
                   </div>
-                ) : (
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '0.75rem' }}>
-                    No reviews published yet for this technician. Book now and leave your feedback after service completion!
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.65rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Service Coverage & Location</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600 }}>
+                      <MapPin size={14} /> <span>{viewingWorker.serviceArea || viewingWorker.user?.address || 'Dhaka Metropolitan'}</span>
+                    </div>
                   </div>
-                )}
+
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', fontWeight: 600 }}>Specializations & Skills</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {(viewingWorker.skills || '').split(',').map((skill, sIdx) => (
+                        <span key={sIdx} className="badge badge-pending" style={{ fontSize: '0.72rem', background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.2rem 0.5rem' }}>
+                          {skill.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Customer Reviews */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--accent-gold)', fontWeight: 700 }}>
+                      <Sparkles size={14} /> Verified Client Reviews
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{viewingWorkerReviews.length} Review(s)</span>
+                  </div>
+
+                  {loadingWorkerReviews ? (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>Loading reviews...</div>
+                  ) : viewingWorkerReviews.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto' }}>
+                      {viewingWorkerReviews.map((rev, rIdx) => (
+                        <div key={rIdx} style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.7rem', borderRadius: '6px', borderLeft: '3px solid var(--accent-gold)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.15rem' }}>
+                            <strong style={{ fontSize: '0.78rem', color: 'var(--text-heading)' }}>{rev.customerName || rev.customer?.name || 'Verified Customer'}</strong>
+                            <span style={{ color: 'var(--accent-gold)', fontSize: '0.72rem', fontWeight: 'bold' }}>⭐ {rev.rating || 5}.0</span>
+                          </div>
+                          <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '0 0 0.15rem 0', fontStyle: 'italic', lineHeight: 1.3 }}>
+                            "{rev.comment || rev.reviewComment || 'Great service!'}"
+                          </p>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                            {rev.serviceType || 'Maintenance'} {rev.reviewedAt ? `• ${new Date(rev.reviewedAt).toLocaleDateString()}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '1rem' }}>
+                      No reviews published yet. Book now and share your feedback after completion!
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                <button className="btn btn-secondary" onClick={() => setViewingWorker(null)}>Close</button>
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '0.8rem', marginTop: '1rem' }}>
+                <button className="btn btn-secondary" style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }} onClick={() => setViewingWorker(null)}>Close</button>
                 <button
                   className="btn btn-primary"
+                  style={{ padding: '0.45rem 1.2rem', fontSize: '0.82rem', fontWeight: 600 }}
                   onClick={() => {
                     const w = viewingWorker;
                     setViewingWorker(null);
@@ -3391,7 +3670,7 @@ function App() {
                     });
                   }}
                 >
-                  Select & Book Service
+                  Select & Book Service →
                 </button>
               </div>
             </div>
@@ -3399,258 +3678,338 @@ function App() {
         );
       })()}
 
-      {/* --- UPGRADED BOOKING CONFIRMATION MODAL --- */}
+      {/* --- UPGRADED BOOKING CONFIRMATION MODAL (NO SCROLLING, FIXED 2-COLUMN WIDE LAYOUT) --- */}
       {selectedWorker && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '540px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.2rem' }}>
-              <img src={selectedWorker.user?.profilePicture || selectedWorker.profilePicture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} alt={selectedWorker.user?.name || selectedWorker.name || 'Technician'} style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }} />
-              <div>
-                <h2 style={{ fontSize: '1.3rem' }}>Assign: {selectedWorker.user?.name || selectedWorker.name || 'Technician'}</h2>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Rank Level: <strong>{selectedWorker.careerLevel || 'Standard'}</strong></div>
-              </div>
-            </div>
-
-            {/* Mandatory Base Price & 5% VAT Breakdown Notice */}
-            <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(59,130,246,0.08))', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '10px', padding: '0.85rem', marginBottom: '1.2rem', fontSize: '0.85rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                <span>Worker Base Advance (Minimum Required):</span>
-                <strong>BDT {selectedWorker.basePrice || 300}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', color: 'var(--text-muted)' }}>
-                <span>SkillVerse Platform VAT (5%):</span>
-                <span>+ BDT {(((selectedWorker.basePrice || 300) * 0.05)).toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.4rem', color: 'var(--primary)', fontWeight: 'bold' }}>
-                <span>Total Advance Payable Upon Confirmation:</span>
-                <span>BDT {(((selectedWorker.basePrice || 300) * 1.05)).toFixed(2)}</span>
-              </div>
-              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.74rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
-                💡 <em>Note: When the worker accepts/counters, you will pay this advance to confirm. Live dispatch timer (1 hr per 1000m) begins immediately with instant refund protection if delayed!</em>
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label className="form-label">Service Category</label>
-                <input className="form-input" style={{ fontSize: '0.9rem' }} value={(selectedWorker.skills || '').split(',')[0]?.trim() || 'General Service'} readOnly />
-              </div>
-              <div>
-                <label className="form-label">Suggested Cost (BDT)</label>
-                <input className="form-input" style={{ fontSize: '0.9rem' }} value={bookingCost} readOnly />
-              </div>
-            </div>
-
-            {/* Custom pricing offer option */}
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Offer Your Price (Optional BDT)</label>
-              <input
-                type="number"
-                className="form-input"
-                placeholder={`e.g. ${bookingCost}`}
-                value={offeredPrice}
-                onChange={e => setOfferedPrice(e.target.value)}
-              />
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Technician can review and counter-offer this pricing suggestion.</span>
-            </div>
-
-            {/* Service Location / Address Selector with GPS & Manual toggle */}
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Select Service Location</span>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <button
-                    type="button"
-                    className={`btn ${locationMode === 'gps' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                    onClick={() => {
-                      setLocationMode('gps');
-                      handleFetchGpsLocation();
-                    }}
-                  >
-                    <Navigation size={12} /> Share GPS Location
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${locationMode === 'manual' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                    onClick={() => setLocationMode('manual')}
-                  >
-                    Write Down Location
-                  </button>
-                </div>
-              </label>
-
-              {locationMode === 'gps' ? (
-                <div style={{ background: 'rgba(16, 185, 129, 0.06)', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                    <MapPin size={16} color="var(--primary)" />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)' }}>
-                      {isGpsLoading ? 'Detecting current GPS coordinates...' : 'GPS Location Captured'}
+        <div className="modal-overlay" onClick={(e) => e.target.className.includes('modal-overlay') && setSelectedWorker(null)}>
+          <div className="modal-content modal-content-wide" style={{ maxWidth: '860px', width: '92vw', padding: '1.3rem 1.6rem', maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            {/* Top Bar Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.7rem', marginBottom: '0.9rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                <img 
+                  src={selectedWorker.user?.profilePicture || selectedWorker.profilePicture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
+                  alt={selectedWorker.user?.name || selectedWorker.name || 'Technician'} 
+                  style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)' }} 
+                />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Book {selectedWorker.user?.name || selectedWorker.name || 'Technician'}</h2>
+                    <span className="badge badge-verified" style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}>
+                      <ShieldCheck size={12} /> {selectedWorker.careerLevel || 'Master'} Rank
                     </span>
                   </div>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={bookingAddress || 'GPS Location: 23.8759° N, 90.3795° E (Uttara Sector 12)'}
-                    onChange={(e) => setBookingAddress(e.target.value)}
-                  />
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                    This exact GPS location will be shared with the technician so they can navigate to your doorstep.
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    ⭐ {selectedWorker.user?.rating || 4.9} • {selectedWorker.experienceYears || 5}+ yrs exp • {selectedWorker.serviceArea || selectedWorker.user?.address || 'Dhaka Area'}
+                  </span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setSelectedWorker(null);
+                  setOfferedPrice('');
+                  setBookingAddress('');
+                  setSelectedApplianceId('');
+                  setSelectedPhotoPreset(null);
+                  setCustomPhotoUrl('');
+                }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '50%', padding: '0.35rem', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {/* 2-Column Grid Layout */}
+            <div className="modal-two-col">
+              {/* Left Column: Pricing breakdown, Category, Custom offer, Location */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {/* Advance & VAT Breakdown Pill */}
+                <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '10px', padding: '0.7rem 0.9rem', fontSize: '0.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Technician Base Advance:</span>
+                    <strong style={{ color: 'var(--text-primary)' }}>৳{selectedWorker.basePrice || 300}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem', color: 'var(--text-muted)' }}>
+                    <span>Platform VAT (5%):</span>
+                    <span>+৳{(((selectedWorker.basePrice || 300) * 0.05)).toFixed(1)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.3rem', color: 'var(--primary)', fontWeight: 'bold' }}>
+                    <span>Total Advance Payable:</span>
+                    <span style={{ fontSize: '0.92rem' }}>৳{(((selectedWorker.basePrice || 300) * 1.05)).toFixed(1)}</span>
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                    🛡️ Advance is paid upon worker confirmation. 1hr/km dispatch protection with instant refund if delayed.
                   </div>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {addresses.length > 0 && (
-                    <select
-                      className="form-select"
-                      value={bookingAddress}
-                      onChange={(e) => setBookingAddress(e.target.value)}
-                    >
-                      <option value="">-- Choose a Saved Address --</option>
-                      {addresses.map(a => (
-                        <option key={a.id} value={a.address}>
-                          {a.label} ({a.type}) - {a.address} {a.isDefault ? '⭐ [Default]' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Enter house, flat, road, and landmark (e.g. House 14, Road 4, Sector 12, Uttara, Dhaka)"
-                    value={bookingAddress}
-                    onChange={(e) => setBookingAddress(e.target.value)}
-                    required
-                  />
-                </div>
-              )}
-            </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Describe the problem</label>
-              <textarea
-                className="form-textarea"
-                rows="2"
-                placeholder="Describe specific fixes needed (e.g. compressor oil leak, broken safety valve)"
-                value={bookingDesc}
-                onChange={(e) => setBookingDesc(e.target.value)}
-              />
-            </div>
-
-            {/* Attach photo section */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Attach Problem Photo (Optional)</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Worker will see this image</span>
-              </label>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  <label className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '0.4rem', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Camera size={14} /> Upload Local Image
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={e => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setCustomPhotoUrl(reader.result);
-                            setSelectedPhotoPreset(null);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.78rem', padding: '0.4rem', justifyContent: 'center', borderColor: 'rgba(59, 130, 246, 0.4)', color: '#60a5fa' }}
-                    onClick={() => {
-                      setCustomPhotoUrl("https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?w=600");
-                      setSelectedPhotoPreset(null);
-                    }}
-                  >
-                    💡 Use Demo Problem Photo
-                  </button>
+                {/* Category & Suggested Cost */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.5rem' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '0.2rem' }}>Service Category</label>
+                    <input className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.55rem' }} value={(selectedWorker.skills || '').split(',')[0]?.trim() || 'General Service'} readOnly />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '0.2rem' }}>Suggested Cost</label>
+                    <input className="form-input" style={{ fontSize: '0.8rem', padding: '0.35rem 0.55rem', fontWeight: 600, color: 'var(--primary)' }} value={`৳ ${bookingCost}`} readOnly />
+                  </div>
                 </div>
 
-                {/* Direct Image URL input */}
+                {/* Offer Price Input */}
                 <div>
+                  <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '0.2rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Your Offer Price (Optional BDT)</span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Technician may counter</span>
+                  </label>
                   <input
-                    type="text"
+                    type="number"
                     className="form-input"
-                    style={{ fontSize: '0.82rem', padding: '0.4rem 0.6rem' }}
-                    placeholder="Or paste image URL (e.g. https://images.unsplash.com/...)"
-                    value={customPhotoUrl?.startsWith('data:') ? '' : (customPhotoUrl || '')}
-                    onChange={e => {
-                      setCustomPhotoUrl(e.target.value);
-                      setSelectedPhotoPreset(null);
-                    }}
+                    style={{ fontSize: '0.8rem', padding: '0.35rem 0.55rem' }}
+                    placeholder={`e.g. ${bookingCost}`}
+                    value={offeredPrice}
+                    onChange={e => setOfferedPrice(e.target.value)}
                   />
                 </div>
 
-                {/* Demo preset buttons */}
-                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Quick Presets:</span>
-                  {[
-                    { label: 'AC Unit', url: 'https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?w=600' },
-                    { label: 'Electrical', url: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=600' },
-                    { label: 'Plumbing', url: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600' },
-                    { label: 'Appliance', url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600' }
-                  ].map((preset, pIdx) => (
-                    <button
-                      key={pIdx}
-                      type="button"
-                      className="badge"
-                      style={{
-                        background: customPhotoUrl === preset.url ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                        color: customPhotoUrl === preset.url ? '#000000' : 'var(--text-secondary)',
-                        border: '1px solid var(--border-color)',
-                        cursor: 'pointer',
-                        padding: '0.2rem 0.5rem'
-                      }}
-                      onClick={() => {
-                        setCustomPhotoUrl(preset.url);
+                {/* Service Location Selector */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.74rem', margin: 0 }}>Service Location</label>
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button
+                        type="button"
+                        className={`btn ${locationMode === 'gps' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}
+                        onClick={() => {
+                          setLocationMode('gps');
+                          handleFetchGpsLocation();
+                        }}
+                      >
+                        <Navigation size={11} /> Share GPS
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${locationMode === 'manual' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}
+                        onClick={() => setLocationMode('manual')}
+                      >
+                        Manual Address
+                      </button>
+                    </div>
+                  </div>
+
+                  {locationMode === 'gps' ? (
+                    <div style={{ background: 'rgba(16, 185, 129, 0.06)', padding: '0.45rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <MapPin size={13} color="var(--primary)" />
+                          <span style={{ fontSize: '0.74rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                            {isGpsLoading ? 'Detecting Live GPS...' : 'GPS Live Location'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', display: 'flex', alignItems: 'center', gap: '3px' }}
+                          onClick={handleFetchGpsLocation}
+                          disabled={isGpsLoading}
+                        >
+                          <Navigation size={10} /> {isGpsLoading ? 'Detecting...' : 'Refresh GPS'}
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ fontSize: '0.76rem', padding: '0.3rem 0.5rem' }}
+                        placeholder="Detecting your current location..."
+                        value={bookingAddress}
+                        onChange={(e) => setBookingAddress(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      {addresses.length > 0 && (
+                        <select
+                          className="form-select"
+                          style={{ fontSize: '0.76rem', padding: '0.3rem 0.5rem' }}
+                          value={bookingAddress}
+                          onChange={(e) => setBookingAddress(e.target.value)}
+                        >
+                          <option value="">-- Choose Saved Address --</option>
+                          {addresses.map(a => (
+                            <option key={a.id} value={a.address || a.fullAddress}>
+                              {a.label} ({a.type}) - {a.address || a.fullAddress}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ fontSize: '0.76rem', padding: '0.3rem 0.5rem', flex: 1 }}
+                          placeholder="House, Road, Area, Landmark (e.g. House 14, Road 4, Uttara)"
+                          value={bookingAddress}
+                          onChange={(e) => setBookingAddress(e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.68rem', padding: '0.3rem 0.5rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}
+                          title="Auto-detect current location"
+                          onClick={handleFetchGpsLocation}
+                          disabled={isGpsLoading}
+                        >
+                          <MapPin size={11} color="var(--primary)" /> {isGpsLoading ? '...' : 'Live GPS'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Problem Description & Photo Attachment */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {/* Describe Problem */}
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '0.2rem' }}>Describe the Problem</label>
+                  <textarea
+                    className="form-textarea"
+                    rows="3"
+                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.55rem', resize: 'none' }}
+                    placeholder="Describe issue (e.g. AC cooling gas leak, water dripping, strange noise)"
+                    value={bookingDesc}
+                    onChange={(e) => setBookingDesc(e.target.value)}
+                  />
+                </div>
+
+                {/* Diagnostic Photo Section */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <label className="form-label" style={{ fontSize: '0.74rem', margin: 0 }}>Diagnostic Photo (Optional)</label>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Helps technician prepare</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                      <label className="btn btn-secondary" style={{ fontSize: '0.72rem', padding: '0.35rem 0.5rem', justifyContent: 'center', cursor: 'pointer' }}>
+                        <Camera size={13} /> Upload Image
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setCustomPhotoUrl(reader.result);
+                                setSelectedPhotoPreset(null);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.72rem', padding: '0.35rem 0.5rem', justifyContent: 'center', borderColor: 'rgba(59, 130, 246, 0.35)', color: '#60a5fa' }}
+                        onClick={() => {
+                          setCustomPhotoUrl("https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?w=600");
+                          setSelectedPhotoPreset(null);
+                        }}
+                      >
+                        💡 Use Demo Photo
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ fontSize: '0.76rem', padding: '0.3rem 0.5rem' }}
+                      placeholder="Or paste image URL (https://...)"
+                      value={customPhotoUrl?.startsWith('data:') ? '' : (customPhotoUrl || '')}
+                      onChange={e => {
+                        setCustomPhotoUrl(e.target.value);
                         setSelectedPhotoPreset(null);
                       }}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
+                    />
 
-                {/* Preview Box */}
-                {customPhotoUrl && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'rgba(255,255,255,0.03)', padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.4)' }}>
-                    <img src={customPhotoUrl} alt="Attached Preview" style={{ width: '80px', height: '55px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
-                    <div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold', display: 'block' }}>✔ Photo Attached</span>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Assigned worker will see this diagnostic photo</span>
+                    {/* Presets */}
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Presets:</span>
+                      {[
+                        { label: 'AC Unit', url: 'https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?w=600' },
+                        { label: 'Electrical', url: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=600' },
+                        { label: 'Plumbing', url: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600' },
+                        { label: 'Appliance', url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600' }
+                      ].map((preset, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          className="badge"
+                          style={{
+                            background: customPhotoUrl === preset.url ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                            color: customPhotoUrl === preset.url ? '#000000' : 'var(--text-secondary)',
+                            border: '1px solid var(--border-color)',
+                            cursor: 'pointer',
+                            fontSize: '0.68rem',
+                            padding: '0.15rem 0.4rem'
+                          }}
+                          onClick={() => {
+                            setCustomPhotoUrl(preset.url);
+                            setSelectedPhotoPreset(null);
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
                     </div>
-                    <button type="button" className="btn-icon" onClick={() => setCustomPhotoUrl('')} style={{ marginLeft: 'auto' }}>
-                      <Trash2 size={15} color="var(--accent-rose)" />
-                    </button>
+
+                    {/* Photo Preview */}
+                    {customPhotoUrl && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(255,255,255,0.03)', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+                        <img src={customPhotoUrl} alt="Preview" style={{ width: '56px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--primary)', fontWeight: 'bold', display: 'block' }}>✔ Photo Attached</span>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Shared with technician for diagnosis</span>
+                        </div>
+                        <button type="button" className="btn-icon" onClick={() => setCustomPhotoUrl('')}>
+                          <Trash2 size={13} color="var(--accent-rose)" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-              <button className="btn btn-secondary" onClick={() => {
-                setSelectedWorker(null);
-                setOfferedPrice('');
-                setBookingAddress('');
-                setSelectedApplianceId('');
-                setSelectedPhotoPreset(null);
-                setCustomPhotoUrl('');
-              }}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleCreateBooking}>Confirm & Dispatch</button>
+            {/* Footer Buttons */}
+            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '0.8rem', marginTop: '0.9rem' }}>
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }}
+                onClick={() => {
+                  setSelectedWorker(null);
+                  setOfferedPrice('');
+                  setBookingAddress('');
+                  setSelectedApplianceId('');
+                  setSelectedPhotoPreset(null);
+                  setCustomPhotoUrl('');
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                style={{ padding: '0.45rem 1.3rem', fontSize: '0.82rem', fontWeight: 600 }}
+                onClick={handleCreateBooking}
+              >
+                Confirm & Dispatch →
+              </button>
             </div>
           </div>
         </div>
@@ -3658,42 +4017,50 @@ function App() {
 
       {/* --- PAYMENT SHEET MODAL --- */}
       {payingBooking && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '460px' }}>
-            <h2 style={{ fontSize: '1.30rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.8rem' }}>
-              💳 Secure Direct Payment Gateways
-            </h2>
+        <div className="modal-overlay" onClick={(e) => e.target.className.includes('modal-overlay') && setPayingBooking(null)}>
+          <div className="modal-content modal-content-standard" style={{ maxWidth: '500px', padding: '1.5rem' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.7rem', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>
+                💳 Secure Payment Gateway
+              </h2>
+              <button onClick={() => setPayingBooking(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <XCircle size={20} />
+              </button>
+            </div>
 
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-              Verify contract completion for <strong>{payingBooking.serviceType}</strong>. Funds will be directly disbursed to worker wallet.
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Verify contract completion for <strong>{payingBooking.serviceType}</strong> with <strong>{payingBooking.worker?.name || 'Technician'}</strong>.
             </p>
 
-            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-              <span>Payable Amount:</span>
-              <strong style={{ color: 'var(--primary)', fontSize: '1.1rem' }}>BDT {payingBooking.estimatedCost}</strong>
+            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '0.85rem' }}>Total Payable Amount:</span>
+              <strong style={{ color: 'var(--primary)', fontSize: '1.15rem' }}>BDT ৳{payingBooking.estimatedCost}</strong>
             </div>
 
             {/* Payment options selection */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label className="form-label">Select Payment Channel</label>
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="form-label" style={{ fontSize: '0.76rem', marginBottom: '0.3rem' }}>Select Payment Channel</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                 <button
+                  type="button"
                   className={`btn ${paymentMethod === 'bkash' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
+                  style={{ justifyContent: 'center', fontSize: '0.78rem', padding: '0.45rem' }}
                   onClick={() => setPaymentMethod('bkash')}
                 >
                   bKash / Nagad
                 </button>
                 <button
+                  type="button"
                   className={`btn ${paymentMethod === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
+                  style={{ justifyContent: 'center', fontSize: '0.78rem', padding: '0.45rem' }}
                   onClick={() => setPaymentMethod('bank')}
                 >
                   Card / Bank
                 </button>
                 <button
+                  type="button"
                   className={`btn ${paymentMethod === 'cash' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ justifyContent: 'center', fontSize: '0.8rem', padding: '0.5rem' }}
+                  style={{ justifyContent: 'center', fontSize: '0.78rem', padding: '0.45rem' }}
                   onClick={() => setPaymentMethod('cash')}
                 >
                   Cash on Hand
@@ -3702,13 +4069,14 @@ function App() {
             </div>
 
             {paymentMethod !== 'cash' && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label">
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label" style={{ fontSize: '0.76rem', marginBottom: '0.3rem' }}>
                   {paymentMethod === 'bkash' ? 'bKash / Nagad Mobile Wallet Number' : 'Bank Account / Card Number'}
                 </label>
                 <input
                   type="text"
                   className="form-input"
+                  style={{ fontSize: '0.82rem', padding: '0.45rem 0.6rem' }}
                   placeholder={paymentMethod === 'bkash' ? 'e.g. 01811223344' : 'e.g. 1234-5678-9012'}
                   value={walletNumber}
                   onChange={e => setWalletNumber(e.target.value)}
@@ -3717,14 +4085,14 @@ function App() {
             )}
 
             {paymentMethod === 'cash' && (
-              <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '0.8rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-                Hand over <strong>BDT {payingBooking.estimatedCost}</strong> in cash directly to technician <strong>{payingBooking.worker?.name}</strong> upon completion inspection.
+              <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '0.7rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)', marginBottom: '1rem', fontSize: '0.78rem' }}>
+                Hand over <strong>BDT ৳{payingBooking.estimatedCost}</strong> in cash directly to technician upon completion inspection.
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-              <button className="btn btn-secondary" onClick={() => setPayingBooking(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={submitSimulatedPayment}>Confirm & Authorize Payment</button>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '0.8rem' }}>
+              <button className="btn btn-secondary" style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }} onClick={() => setPayingBooking(null)}>Cancel</button>
+              <button className="btn btn-primary" style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem' }} onClick={submitSimulatedPayment}>Confirm & Pay</button>
             </div>
           </div>
         </div>

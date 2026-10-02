@@ -1,10 +1,9 @@
 package com.skillverse.controller;
 
 import com.skillverse.model.MarketplaceItem;
-import com.skillverse.service.MarketplaceService;
+import com.skillverse.repository.MarketplaceItemRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -12,44 +11,30 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class MarketplaceController {
 
-    private final MarketplaceService marketplaceService;
+    private final MarketplaceItemRepository marketplaceRepository;
 
-    public MarketplaceController(MarketplaceService marketplaceService) {
-        this.marketplaceService = marketplaceService;
+    public MarketplaceController(MarketplaceItemRepository marketplaceRepository) {
+        this.marketplaceRepository = marketplaceRepository;
     }
 
     @GetMapping
     public ResponseEntity<List<MarketplaceItem>> getItems() {
-        return ResponseEntity.ok(marketplaceService.getAllItems());
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<MarketplaceItem> getItemById(@PathVariable Long id) {
-        return marketplaceService.getItemById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(marketplaceRepository.findAll());
     }
 
     @GetMapping("/filter")
     public ResponseEntity<List<MarketplaceItem>> getItemsByType(@RequestParam String type) {
-        return ResponseEntity.ok(marketplaceService.getItemsByType(type));
+        return ResponseEntity.ok(marketplaceRepository.findByType(type));
     }
 
     @PostMapping
     public ResponseEntity<MarketplaceItem> addItem(@RequestBody MarketplaceItem item) {
-        return ResponseEntity.ok(marketplaceService.addItem(item));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<MarketplaceItem> updateItem(@PathVariable Long id, @RequestBody MarketplaceItem item) {
-        return marketplaceService.updateItem(id, item)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(marketplaceRepository.save(item));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteItem(@PathVariable Long id) {
-        marketplaceService.deleteItem(id);
+        marketplaceRepository.deleteById(id);
         return ResponseEntity.ok().build();
     }
 }
