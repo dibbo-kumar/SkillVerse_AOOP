@@ -32,9 +32,10 @@ public class BookingControllerTest {
         assertThat(customer).isNotNull();
         assertThat(worker).isNotNull();
 
+        long stamp = System.currentTimeMillis();
         String bookingJson = String.format(
-            "{\"customerId\":%d,\"workerId\":%d,\"serviceType\":\"HVAC & AC\",\"estimatedCost\":1800.0,\"description\":\"AC deep wash and gas charging.\"}",
-            customer.getId(), worker.getId()
+            "{\"customerId\":%d,\"workerId\":%d,\"serviceType\":\"HVAC & AC\",\"estimatedCost\":1800.0,\"preferredDate\":\"2026-12-01\",\"preferredTime\":\"Slot-%d\",\"description\":\"AC deep wash and gas charging.\"}",
+            customer.getId(), worker.getId(), stamp
         );
 
         // 1. Create booking
@@ -87,5 +88,52 @@ public class BookingControllerTest {
 
         mockMvc.perform(get("/api/bookings/customer/" + customer.getId()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void testScheduledBookingAndAutoCancelTimeout() throws Exception {
+        User customer = userRepository.findByEmail("anis@gmail.com").orElse(null);
+        User worker = userRepository.findByEmail("kamrul@gmail.com").orElse(null);
+
+        assertThat(customer).isNotNull();
+        assertThat(worker).isNotNull();
+
+        long stamp2 = System.currentTimeMillis() + 100;
+        String bookingJson = String.format(
+            "{\"customerId\":%d,\"workerId\":%d,\"serviceType\":\"Electrician\",\"estimatedCost\":1200.0,\"preferredDate\":\"2026-11-20\",\"preferredTime\":\"Slot-%d\",\"description\":\"Switchboard repair.\"}",
+            customer.getId(), worker.getId(), stamp2
+        );
+
+        String responseContent = mockMvc.perform(post("/api/bookings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bookingJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.preferredDate").value("2026-11-20"))
+                .andReturn().getResponse().getContentAsString();
+
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(responseContent);
+        long bookingId = rootNode.get("id").asLong();
+
+        // Worker accepts booking (goes to pending / awaiting advance)
+        mockMvc.perform(put("/api/bookings/" + bookingId + "/accept-price")
+                .param("acceptedBy", "WORKER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AWAITING_ADVANCE"));
+
+        // Advance payment
+        String advancePayload = "{\"paymentMethod\":\"bKash\",\"mobileNumber\":\"01711223344\",\"amount\":300.0}";
+        mockMvc.perform(post("/api/bookings/" + bookingId + "/pay-advance")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(advancePayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.advancePaid").value(true));
+
+        // Worker starts journey
+        mockMvc.perform(put("/api/bookings/" + bookingId + "/on-the-way"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ON_THE_WAY"));
     }
 }

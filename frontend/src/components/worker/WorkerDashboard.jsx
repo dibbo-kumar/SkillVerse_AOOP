@@ -5,7 +5,7 @@ import {
   KeyRound, RefreshCw, Layers, ArrowDownRight, Wallet, Award, XCircle,
   Eye, CheckCheck, Star, Camera, FileText, Send, Filter, Search, RotateCcw,
   ShieldAlert, FileCheck, Check, UploadCloud, ChevronRight, HelpCircle, AlertTriangle,
-  Compass, Plus, Trash2, Tag
+  Compass, Plus, Trash2, Tag, Activity, Calendar
 } from 'lucide-react';
 import WorkerBookingDetailsModal from './WorkerBookingDetailsModal';
 import LocationPickerModal from '../common/LocationPickerModal';
@@ -86,6 +86,87 @@ function AutoCancelTimer({ createdAt, onExpired }) {
     >
       <Clock size={11} />
       {isExpired ? 'Will be cancelled (Expired)' : `Will be cancelled in ${timeLeft}`}
+    </span>
+  );
+}
+
+function ScheduleTimeoutTimer({ booking, onExpired }) {
+  const [statusText, setStatusText] = useState('');
+  const [isCritical, setIsCritical] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      let targetDate = new Date();
+      const prefDate = booking?.preferredDate || '';
+      if (prefDate.toLowerCase() === 'tomorrow') {
+        targetDate.setDate(targetDate.getDate() + 1);
+      } else if (prefDate.toLowerCase() === 'in 2 days') {
+        targetDate.setDate(targetDate.getDate() + 2);
+      } else if (prefDate && !isNaN(Date.parse(prefDate))) {
+        targetDate = new Date(prefDate);
+      } else if (booking?.scheduledTime) {
+        targetDate = new Date(booking.scheduledTime);
+      }
+
+      let startHours = 10;
+      let startMins = 0;
+      const prefTime = booking?.preferredTime || '10:00 AM';
+      const timeMatch = prefTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (timeMatch) {
+        let hrs = parseInt(timeMatch[1], 10);
+        const mins = parseInt(timeMatch[2], 10);
+        const ampm = timeMatch[3] ? timeMatch[3].toUpperCase() : '';
+        if (ampm === 'PM' && hrs < 12) hrs += 12;
+        if (ampm === 'AM' && hrs === 12) hrs = 0;
+        startHours = hrs;
+        startMins = mins;
+      }
+
+      targetDate.setHours(startHours, startMins, 0, 0);
+      const scheduledTimeMs = targetDate.getTime();
+      const nowMs = Date.now();
+      const cancelDeadlineMs = scheduledTimeMs + 30 * 60 * 1000;
+
+      if (nowMs < scheduledTimeMs) {
+        setStatusText(`📅 Scheduled: ${prefDate || 'Tomorrow'} (${prefTime})`);
+        setIsCritical(false);
+      } else if (nowMs <= cancelDeadlineMs) {
+        const diff = cancelDeadlineMs - nowMs;
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setStatusText(`⚠️ Start within ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} (Auto-cancel in 30m)`);
+        setIsCritical(true);
+      } else {
+        setStatusText(`❌ Auto-cancelled (30m delay)`);
+        setIsCritical(true);
+        if (onExpired) onExpired();
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [booking]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.72rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isCritical ? '#ef4444' : '#38bdf8',
+        background: isCritical ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+        border: isCritical ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
+        padding: '0.2rem 0.45rem',
+        borderRadius: '6px'
+      }}
+      title="Work must be started within 30 minutes of scheduled time, otherwise booking is auto-cancelled and pre-paid money is refunded."
+    >
+      <Clock size={11} />
+      {statusText}
     </span>
   );
 }
@@ -317,8 +398,6 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
 
   const activeJob = workerBookings.find(b =>
     ['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETION_REQUESTED'].includes(b.status)
-  ) || workerBookings.find(b =>
-    b.status === 'CONFIRMED' && b.advancePaid
   );
   const hasActiveJob = !!activeJob;
 
@@ -1301,12 +1380,17 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
                 Accept an incoming direct service request or submit a quote on a posted problem to start a job.
               </p>
-              <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', marginTop: '1.5rem' }}>
-                <button className="btn btn-primary" onClick={() => setActiveSubTab('requests')}>
-                  View Direct Requests ({pendingRequests.length})
+              <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                {pendingJobs.length > 0 && (
+                  <button className="btn btn-primary" onClick={() => setActiveSubTab('pending-jobs')}>
+                    ⏳ View Pending & Scheduled Jobs ({pendingJobs.length})
+                  </button>
+                )}
+                <button className={`btn ${pendingJobs.length > 0 ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setActiveSubTab('requests')}>
+                  📥 Direct Requests ({pendingRequests.length})
                 </button>
                 <button className="btn btn-secondary" onClick={() => setActiveSubTab('problems')}>
-                  Browse Problem Posts ({problemPosts.length})
+                  📢 Problem Posts ({problemPosts.length})
                 </button>
               </div>
             </div>
@@ -1402,6 +1486,9 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                       <Calendar size={12} />
                       <span>{b.preferredDate || 'Tomorrow'} • {b.preferredTime || '10:00 AM'}</span>
                     </div>
+                    <div style={{ marginTop: '0.35rem' }}>
+                      <ScheduleTimeoutTimer booking={b} onExpired={fetchWorkerData} />
+                    </div>
                   </div>
 
                   {/* Column 4: Price & Net Earnings */}
@@ -1419,18 +1506,30 @@ export default function WorkerDashboard({ currentWorker, onShowToast }) {
                       !hasActiveJob ? (
                         <button
                           className="btn btn-primary"
-                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem', width: '100%', justifyContent: 'center' }}
+                          style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', width: '100%', justifyContent: 'center', fontWeight: 600 }}
                           onClick={() => {
                             handleSetOnTheWay(b.id);
                             setActiveSubTab('active-job');
                           }}
                         >
-                          🚀 Start Journey
+                          🚀 Start Job (On The Way)
                         </button>
                       ) : (
-                        <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.73rem', textAlign: 'center', width: '100%' }}>
-                          ✔ Queued for Slot
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '100%' }}>
+                          <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.73rem', textAlign: 'center', width: '100%' }}>
+                            ✔ Confirmed & Queued
+                          </span>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.72rem', width: '100%', justifyContent: 'center' }}
+                            onClick={() => {
+                              handleSetOnTheWay(b.id);
+                              setActiveSubTab('active-job');
+                            }}
+                          >
+                            🚀 Switch & Start →
+                          </button>
+                        </div>
                       )
                     ) : (
                       <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.73rem', textAlign: 'center', width: '100%' }}>

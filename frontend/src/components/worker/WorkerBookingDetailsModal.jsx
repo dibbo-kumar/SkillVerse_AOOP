@@ -48,9 +48,91 @@ function AutoCancelTimer({ createdAt, onExpired }) {
         padding: '0.25rem 0.55rem',
         borderRadius: '6px'
       }}
+      title="Auto-cancel after 15 minutes if not accepted"
     >
       <Clock size={12} />
       {isExpired ? 'Auto-cancelled (Expired)' : `Will be cancelled in ${timeLeft}`}
+    </span>
+  );
+}
+
+function ScheduleTimeoutTimer({ booking, onExpired }) {
+  const [statusText, setStatusText] = useState('');
+  const [isCritical, setIsCritical] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      let targetDate = new Date();
+      const prefDate = booking?.preferredDate || '';
+      if (prefDate.toLowerCase() === 'tomorrow') {
+        targetDate.setDate(targetDate.getDate() + 1);
+      } else if (prefDate.toLowerCase() === 'in 2 days') {
+        targetDate.setDate(targetDate.getDate() + 2);
+      } else if (prefDate && !isNaN(Date.parse(prefDate))) {
+        targetDate = new Date(prefDate);
+      } else if (booking?.scheduledTime) {
+        targetDate = new Date(booking.scheduledTime);
+      }
+
+      let startHours = 10;
+      let startMins = 0;
+      const prefTime = booking?.preferredTime || '10:00 AM';
+      const timeMatch = prefTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (timeMatch) {
+        let hrs = parseInt(timeMatch[1], 10);
+        const mins = parseInt(timeMatch[2], 10);
+        const ampm = timeMatch[3] ? timeMatch[3].toUpperCase() : '';
+        if (ampm === 'PM' && hrs < 12) hrs += 12;
+        if (ampm === 'AM' && hrs === 12) hrs = 0;
+        startHours = hrs;
+        startMins = mins;
+      }
+
+      targetDate.setHours(startHours, startMins, 0, 0);
+      const scheduledTimeMs = targetDate.getTime();
+      const nowMs = Date.now();
+      const cancelDeadlineMs = scheduledTimeMs + 30 * 60 * 1000;
+
+      if (nowMs < scheduledTimeMs) {
+        setStatusText(`📅 Scheduled: ${prefDate || 'Tomorrow'} (${prefTime})`);
+        setIsCritical(false);
+      } else if (nowMs <= cancelDeadlineMs) {
+        const diff = cancelDeadlineMs - nowMs;
+        const mins = Math.floor(diff / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setStatusText(`⚠️ Start within ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} (Auto-cancel in 30m)`);
+        setIsCritical(true);
+      } else {
+        setStatusText(`❌ Auto-cancelled (30m delay)`);
+        setIsCritical(true);
+        if (onExpired) onExpired();
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [booking]);
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.3rem',
+        fontSize: '0.72rem',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        color: isCritical ? '#ef4444' : '#38bdf8',
+        background: isCritical ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+        border: isCritical ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
+        padding: '0.2rem 0.45rem',
+        borderRadius: '6px'
+      }}
+      title="Work must be started within 30 minutes of scheduled time, otherwise booking is auto-cancelled and refunded."
+    >
+      <Clock size={11} />
+      {statusText}
     </span>
   );
 }
@@ -266,7 +348,10 @@ export default function WorkerBookingDetailsModal({
               <div style={{ textAlign: 'right', fontSize: '0.74rem' }}>
                 <span style={{ color: 'var(--text-muted)', display: 'block' }}>Scheduled Slot</span>
                 <strong style={{ color: 'var(--text-heading)', display: 'block' }}>📅 {booking.preferredDate || 'Tomorrow'}</strong>
-                <span style={{ color: 'var(--primary)', fontWeight: 600 }}>⏰ {booking.preferredTime || '10:00 AM - 12:00 PM'}</span>
+                <span style={{ color: 'var(--primary)', fontWeight: 600, display: 'block' }}>⏰ {booking.preferredTime || '10:00 AM - 12:00 PM'}</span>
+                <div style={{ marginTop: '0.25rem' }}>
+                  <ScheduleTimeoutTimer booking={booking} />
+                </div>
               </div>
             </div>
 
@@ -391,7 +476,7 @@ export default function WorkerBookingDetailsModal({
         {/* Step-by-Step Action Controls */}
         <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.7rem', borderTop: '1px solid var(--border-color)', marginTop: '0.2rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {booking.status === 'CONFIRMED' && (
+            {(booking.status === 'CONFIRMED' || (booking.advancePaid && !['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETION_REQUESTED', 'COMPLETED', 'PAID', 'CANCELLED'].includes(booking.status))) && (
               <button
                 className="btn btn-primary"
                 style={{ fontSize: '0.76rem', padding: '0.4rem 0.9rem' }}
@@ -400,7 +485,7 @@ export default function WorkerBookingDetailsModal({
                   onClose();
                 }}
               >
-                🚀 Start Journey (On The Way)
+                🚀 Start Job (On The Way)
               </button>
             )}
 

@@ -47,15 +47,80 @@ public class BookingService {
         }
     }
 
+    public LocalDateTime calculateScheduledStartTime(ServiceBooking booking) {
+        if (booking == null) return null;
+        java.time.LocalDate targetDate = null;
+        String prefDate = booking.getPreferredDate() != null ? booking.getPreferredDate().trim() : "";
+        LocalDateTime created = booking.getCreatedAt() != null ? booking.getCreatedAt() : LocalDateTime.now();
+
+        if ("Today".equalsIgnoreCase(prefDate)) {
+            targetDate = created.toLocalDate();
+        } else if ("Tomorrow".equalsIgnoreCase(prefDate)) {
+            targetDate = created.toLocalDate().plusDays(1);
+        } else if ("In 2 Days".equalsIgnoreCase(prefDate)) {
+            targetDate = created.toLocalDate().plusDays(2);
+        } else if (!prefDate.isEmpty()) {
+            try {
+                targetDate = java.time.LocalDate.parse(prefDate);
+            } catch (Exception e) {
+                try {
+                    java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                    targetDate = java.time.LocalDate.parse(prefDate, dtf);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        if (targetDate == null) {
+            if (booking.getScheduledTime() != null) {
+                targetDate = booking.getScheduledTime().toLocalDate();
+            } else {
+                targetDate = created.toLocalDate().plusDays(1);
+            }
+        }
+
+        java.time.LocalTime targetTime = null;
+        String prefTime = booking.getPreferredTime() != null ? booking.getPreferredTime().trim() : "";
+        if (!prefTime.isEmpty()) {
+            String firstPart = prefTime.split("-")[0].trim();
+            try {
+                java.time.format.DateTimeFormatter tf = java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+                targetTime = java.time.LocalTime.parse(firstPart, tf);
+            } catch (Exception e) {
+                try {
+                    java.time.format.DateTimeFormatter tf2 = java.time.format.DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH);
+                    targetTime = java.time.LocalTime.parse(firstPart, tf2);
+                } catch (Exception e2) {
+                    try {
+                        java.time.format.DateTimeFormatter tf3 = java.time.format.DateTimeFormatter.ofPattern("H:mm");
+                        targetTime = java.time.LocalTime.parse(firstPart, tf3);
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        if (targetTime == null) {
+            if (booking.getScheduledTime() != null) {
+                targetTime = booking.getScheduledTime().toLocalTime();
+            } else {
+                targetTime = java.time.LocalTime.of(10, 0);
+            }
+        }
+
+        return LocalDateTime.of(targetDate, targetTime);
+    }
+
     @org.springframework.scheduling.annotation.Scheduled(fixedRate = 15000)
     public void autoExpirePendingBookings() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1. Auto-expire unresponded PENDING bookings after 15 minutes
+        LocalDateTime pendingCutoff = now.minusMinutes(15);
         List<ServiceBooking> pendingBookings = bookingRepository.findAll().stream()
-                .filter(b -> "PENDING".equalsIgnoreCase(b.getStatus()) && b.getCreatedAt() != null && b.getCreatedAt().isBefore(cutoff))
+                .filter(b -> "PENDING".equalsIgnoreCase(b.getStatus()) && b.getCreatedAt() != null && b.getCreatedAt().isBefore(pendingCutoff))
                 .toList();
         for (ServiceBooking b : pendingBookings) {
             b.setStatus("CANCELLED");
-            b.setUpdatedAt(LocalDateTime.now());
+            b.setUpdatedAt(now);
             bookingRepository.save(b);
             if (b.getCustomer() != null) {
                 notificationService.sendNotification(b.getCustomer(), "Booking Request Auto-Expired",
@@ -66,6 +131,78 @@ public class BookingService {
                 notificationService.sendNotification(b.getWorker(), "Booking Request Missed",
                         "Booking request (#BK-" + b.getId() + ") from " + (b.getCustomer() != null ? b.getCustomer().getName() : "Customer") + " expired automatically after 15 minutes without response.",
                         "BOOKING_MISSED", b.getId());
+            }
+        }
+
+        // 2. Auto-cancel scheduled bookings if worker doesn't start work within 30 minutes of scheduled time
+        List<String> unstartedStatuses = List.of("ACCEPTED", "AWAITING_ADVANCE", "PRICE_AGREED", "CONFIRMED");
+        List<ServiceBooking> scheduledBookings = bookingRepository.findAll().stream()
+                .filter(b -> b.getStatus() != null && unstartedStatuses.contains(b.getStatus().toUpperCase()))
+                .toList();
+
+        for (ServiceBooking b : scheduledBookings) {
+            LocalDateTime scheduledStart = b.getScheduledTime();
+            if (scheduledStart == null) {
+                scheduledStart = calculateScheduledStartTime(b);
+                b.setScheduledTime(scheduledStart);
+            }
+            if (scheduledStart != null) {
+                LocalDateTime cancelDeadline = scheduledStart.plusMinutes(30);
+                if (now.isAfter(cancelDeadline)) {
+                    b.setStatus("CANCELLED");
+                    b.setUpdatedAt(now);
+
+                    boolean hadAdvance = Boolean.TRUE.equals(b.getAdvancePaid())
+                            || (b.getAdvancePaidAmount() != null && b.getAdvancePaidAmount() > 0)
+                            || "CONFIRMED".equalsIgnoreCase(b.getStatus());
+
+                    if (hadAdvance) {
+                        double base = b.getAdvancePaidAmount() != null && b.getAdvancePaidAmount() > 0
+                                ? b.getAdvancePaidAmount()
+                                : (b.getBasePrice() != null ? b.getBasePrice() : 300.0);
+                        double vat = b.getAdvanceVatAmount() != null && b.getAdvanceVatAmount() > 0
+                                ? b.getAdvanceVatAmount()
+                                : Math.round(base * 0.05 * 100.0) / 100.0;
+                        double refundTotal = base + vat;
+
+                        String mobile = b.getAdvancePaymentMobile() != null && !b.getAdvancePaymentMobile().trim().isEmpty()
+                                ? b.getAdvancePaymentMobile()
+                                : (b.getCustomer() != null && b.getCustomer().getPhone() != null ? b.getCustomer().getPhone() : "Customer Account");
+                        String method = b.getAdvancePaymentMethod() != null && !b.getAdvancePaymentMethod().trim().isEmpty()
+                                ? b.getAdvancePaymentMethod()
+                                : "bKash / Account Balance";
+
+                        b.setIsRefunded(true);
+                        b.setRefundAmount(refundTotal);
+                        b.setRefundMobile(mobile);
+                        b.setRefundedAt(now);
+
+                        bookingRepository.save(b);
+
+                        if (b.getCustomer() != null) {
+                            notificationService.sendNotification(b.getCustomer(), "Prepaid Money Refunded (Technician Delay)",
+                                    "Your booking (#BK-" + b.getId() + ") for " + b.getServiceType() + " was automatically cancelled because the technician did not start work within 30 minutes of scheduled time (" + (b.getPreferredDate() != null ? b.getPreferredDate() : "") + " " + (b.getPreferredTime() != null ? b.getPreferredTime() : "") + "). ৳" + refundTotal + " has been refunded to your " + method + " (" + mobile + ").",
+                                    "TIMEOUT_REFUND", b.getId());
+                        }
+                        if (b.getWorker() != null) {
+                            notificationService.sendNotification(b.getWorker(), "Scheduled Booking Cancelled (30 Min Delay)",
+                                    "Booking (#BK-" + b.getId() + ") was automatically cancelled because work was not started within 30 minutes of the scheduled appointment (" + (b.getPreferredDate() != null ? b.getPreferredDate() : "") + " " + (b.getPreferredTime() != null ? b.getPreferredTime() : "") + "). Client has been refunded.",
+                                    "BOOKING_CANCELLED", b.getId());
+                        }
+                    } else {
+                        bookingRepository.save(b);
+                        if (b.getCustomer() != null) {
+                            notificationService.sendNotification(b.getCustomer(), "Scheduled Booking Cancelled",
+                                    "Your booking (#BK-" + b.getId() + ") for " + b.getServiceType() + " was cancelled as technician did not start work within 30 minutes of scheduled time.",
+                                    "BOOKING_CANCELLED", b.getId());
+                        }
+                        if (b.getWorker() != null) {
+                            notificationService.sendNotification(b.getWorker(), "Booking Auto-Cancelled",
+                                    "Booking (#BK-" + b.getId() + ") was cancelled due to not being started within 30 minutes of scheduled appointment.",
+                                    "BOOKING_CANCELLED", b.getId());
+                        }
+                    }
+                }
             }
         }
     }
@@ -181,9 +318,9 @@ public class BookingService {
         booking.setCustomer(customer);
         booking.setWorker(worker);
         booking.setServiceType(request.getServiceType());
-        booking.setScheduledTime(LocalDateTime.now().plusDays(1));
         booking.setPreferredDate(preferredDate);
         booking.setPreferredTime(preferredTime);
+        booking.setScheduledTime(calculateScheduledStartTime(booking));
         String serviceAddress = request.getAddress();
         if (serviceAddress == null || serviceAddress.trim().isEmpty()) {
             if (request.getDescription() != null && request.getDescription().contains("[Location:")) {
@@ -453,8 +590,10 @@ public class BookingService {
         ServiceBooking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Booking not found: " + id));
 
-        if (!"CONFIRMED".equalsIgnoreCase(booking.getStatus()) && !"ON_THE_WAY".equalsIgnoreCase(booking.getStatus())) {
-            throw new IllegalStateException("Job must be CONFIRMED before starting journey.");
+        if (!"CONFIRMED".equalsIgnoreCase(booking.getStatus()) && !"ON_THE_WAY".equalsIgnoreCase(booking.getStatus())
+                && !"ACCEPTED".equalsIgnoreCase(booking.getStatus()) && !"PRICE_AGREED".equalsIgnoreCase(booking.getStatus())
+                && !"AWAITING_ADVANCE".equalsIgnoreCase(booking.getStatus())) {
+            throw new IllegalStateException("Job must be accepted or confirmed before starting journey.");
         }
         booking.setStatus("ON_THE_WAY");
         ServiceBooking saved = bookingRepository.save(booking);

@@ -714,6 +714,24 @@ export default function CustomerBookings({
                     </div>
                   </div>
                 )}
+
+                {/* Cancelled / Refunded Banner */}
+                {b.status === 'CANCELLED' && b.isRefunded && (
+                  <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.3)', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CheckCircle2 size={18} color="#10b981" />
+                      <div>
+                        <strong style={{ fontSize: '0.88rem', color: 'var(--text-heading)', display: 'block' }}>
+                          Prepaid Money Auto-Refunded: ৳{b.refundAmount || ((b.basePrice || 300) * 1.05)}
+                        </strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Returned to {b.refundMobile || 'your account'} via {b.advancePaymentMethod || 'Online Wallet'} (Technician did not start within 30 minutes of scheduled time)
+                        </span>
+                      </div>
+                    </div>
+                    <span className="badge badge-verified" style={{ fontSize: '0.75rem' }}>Refund Settled</span>
+                  </div>
+                )}
               </div>
             );
           })
